@@ -225,6 +225,18 @@ android {
         }
     }
 
+    def fixedDebugKeystore = file('debug.keystore')
+    if (fixedDebugKeystore.exists()) {
+        signingConfigs {
+            debug {
+                storeFile fixedDebugKeystore
+                storePassword 'android'
+                keyAlias 'mobilegl'
+                keyPassword 'android'
+            }
+        }
+    }
+
     if (releaseSigningReady) {
         signingConfigs {
             release {
@@ -237,6 +249,11 @@ android {
     }
 
     buildTypes {
+        debug {
+            if (fixedDebugKeystore.exists()) {
+                signingConfig signingConfigs.debug
+            }
+        }
         release {
             debuggable debuggableRelease
             minifyEnabled false

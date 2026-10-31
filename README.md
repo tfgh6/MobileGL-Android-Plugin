@@ -68,5 +68,11 @@ RendererProxy: renderer proxy ready: mode=sfpew ... missing=0/2900
 
 ## Signing
 
+- `android-plugin/debug.keystore` (alias `mobilegl`, password `android`) is
+  committed so local builds and GitHub Actions produce the same signature.
+- APKs signed with an older, different debug key require one uninstall before
+  the first install of this build.
+
+
 Debug APKs are signed with the machine/runner debug keystore. Uninstall an APK
 signed by a different debug key before installing a new one.
