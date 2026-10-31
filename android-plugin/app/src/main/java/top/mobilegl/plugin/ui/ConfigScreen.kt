@@ -133,6 +133,43 @@ fun ConfigScreen(
             OptionToggle("SFPEW 关闭 MultiDrawArrays", "SFPEW_NO_MULTIDRAWARRAYS", text) { text = setKey(text, "SFPEW_NO_MULTIDRAWARRAYS", onOff(it)) }
             OptionToggle("SFPEW 关闭列表批处理", "SFPEW_NO_LIST_BATCH", text) { text = setKey(text, "SFPEW_NO_LIST_BATCH", onOff(it)) }
             OptionToggle("SFPEW 手动 mip 生成", "SFPEW_MANUAL_MIPGEN", text) { text = setKey(text, "SFPEW_MANUAL_MIPGEN", onOff(it)) }
+
+            Spacer(Modifier.height(8.dp))
+            Text("通用（新增）", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
+            OptionToggle("禁用 texture view", "MOBILEGL_DISABLE_TEXTURE_VIEW", text) { text = setKey(text, "MOBILEGL_DISABLE_TEXTURE_VIEW", onOff(it)) }
+            OptionToggle("禁用大缓冲复用", "MOBILEGL_DISABLE_LARGE_BUFFER_ADOPTION", text) { text = setKey(text, "MOBILEGL_DISABLE_LARGE_BUFFER_ADOPTION", onOff(it)) }
+            OptionToggle("异步着色器编译", "MOBILEGL_ASYNC_SHADER_COMPILE", text) { text = setKey(text, "MOBILEGL_ASYNC_SHADER_COMPILE", onOff(it)) }
+            OptionText("异步编译线程数", "MOBILEGL_ASYNC_SHADER_COMPILE_THREADS", text) { text = setKey(text, "MOBILEGL_ASYNC_SHADER_COMPILE_THREADS", it) }
+            OptionText("帧在途数", "MOBILEGL_FRAMES_IN_FLIGHT", text) { text = setKey(text, "MOBILEGL_FRAMES_IN_FLIGHT", it) }
+            OptionText("GPU 挂起预算 (ms)", "MOBILEGL_GPU_HANG_BUDGET_MS", text) { text = setKey(text, "MOBILEGL_GPU_HANG_BUDGET_MS", it) }
+            OptionToggle("Shader cache", "MOBILEGL_SHADER_CACHE", text) { text = setKey(text, "MOBILEGL_SHADER_CACHE", onOff(it)) }
+            OptionToggle("SPIR-V 校验", "MOBILEGL_ENABLE_SPIRV_VALIDATION", text) { text = setKey(text, "MOBILEGL_ENABLE_SPIRV_VALIDATION", onOff(it)) }
+
+            Spacer(Modifier.height(8.dp))
+            Text("DirectVulkan / Magma（新增）", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
+            OptionToggle("额外交换链图像", "MOBILEGL_MAGMA_EXTRA_SWAPCHAIN_IMAGES", text) { text = setKey(text, "MOBILEGL_MAGMA_EXTRA_SWAPCHAIN_IMAGES", onOff(it)) }
+            OptionToggle("分片拷贝", "MOBILEGL_MAGMA_SPLIT_SLICE_COPIES", text) { text = setKey(text, "MOBILEGL_MAGMA_SPLIT_SLICE_COPIES", onOff(it)) }
+            OptionToggle("Pass 缓存", "MOBILEGL_MAGMA_PASS_CACHE", text) { text = setKey(text, "MOBILEGL_MAGMA_PASS_CACHE", onOff(it)) }
+            OptionToggle("丢弃后重发状态", "MOBILEGL_MAGMA_REEMIT_STATE_AFTER_DISCARD", text) { text = setKey(text, "MOBILEGL_MAGMA_REEMIT_STATE_AFTER_DISCARD", onOff(it)) }
+            OptionToggle("禁用混合深度写入", "MOBILEGL_MAGMA_DISABLE_BLENDED_DEPTH_WRITE", text) { text = setKey(text, "MOBILEGL_MAGMA_DISABLE_BLENDED_DEPTH_WRITE", onOff(it)) }
+            OptionText("Magma 帧在途数", "MOBILEGL_MAGMA_FRAMESINFLIGHT", text) { text = setKey(text, "MOBILEGL_MAGMA_FRAMESINFLIGHT", it) }
+            OptionToggle("E5 raw reads", "MOBILEGL_MAGMA_E5_RAW_READS", text) { text = setKey(text, "MOBILEGL_MAGMA_E5_RAW_READS", onOff(it)) }
+
+            Spacer(Modifier.height(8.dp))
+            Text("DirectGLES / Espryt（新增）", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
+            OptionToggle("启用 texture view", "MOBILEGL_ESPRYT_ENABLE_TEXTURE_VIEW", text) { text = setKey(text, "MOBILEGL_ESPRYT_ENABLE_TEXTURE_VIEW", onOff(it)) }
+            OptionToggle("使用 ANGLE", "MOBILEGL_ESPRYT_USE_ANGLE", text) { text = setKey(text, "MOBILEGL_ESPRYT_USE_ANGLE", onOff(it)) }
+            OptionToggle("禁用上传环", "MOBILEGL_ESPRYT_DISABLE_UPLOAD_RING", text) { text = setKey(text, "MOBILEGL_ESPRYT_DISABLE_UPLOAD_RING", onOff(it)) }
+            OptionToggle("避免 sampler mipmap min filter", "MOBILEGL_ESPRYT_AVOID_SAMPLER_MIPMAP_MIN_FILTER", text) { text = setKey(text, "MOBILEGL_ESPRYT_AVOID_SAMPLER_MIPMAP_MIN_FILTER", onOff(it)) }
+            OptionToggle("VAO shadow", "MOBILEGL_ESPRYT_VAO_SHADOW", text) { text = setKey(text, "MOBILEGL_ESPRYT_VAO_SHADOW", onOff(it)) }
+            OptionToggle("延迟 geometry emits", "MOBILEGL_ESPRYT_DEFER_GEOMETRY_EMITS", text) { text = setKey(text, "MOBILEGL_ESPRYT_DEFER_GEOMETRY_EMITS", onOff(it)) }
+            OptionText("上传环大小 (MiB)", "MOBILEGL_PIPE_INDEX_MIRROR_MB", text) { text = setKey(text, "MOBILEGL_PIPE_INDEX_MIRROR_MB", it) }
+
+            Spacer(Modifier.height(8.dp))
+            Text("诊断", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
+            OptionToggle("管道统计", "MOBILEGL_PIPE_STATS", text) { text = setKey(text, "MOBILEGL_PIPE_STATS", onOff(it)) }
+            OptionToggle("FPS 日志", "MOBILEGL_FPS_LOG", text) { text = setKey(text, "MOBILEGL_FPS_LOG", onOff(it)) }
+            OptionText("统计周期 (帧)", "MOBILEGL_PIPE_STATS_PERIOD", text) { text = setKey(text, "MOBILEGL_PIPE_STATS_PERIOD", it) }
         }
 
         SectionLabel("原始文件")
@@ -172,6 +209,21 @@ private fun OptionSelect(label: String, options: List<String>, value: String, on
                 FilterChip(selected = option == value, onClick = { onSelect(option) }, label = { Text(option) })
             }
         }
+    }
+}
+
+@Composable
+private fun OptionText(label: String, key: String, text: String, onChange: (String) -> Unit) {
+    var value by remember(key, text) { mutableStateOf(readKey(text, key, "")) }
+    Column(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+        OutlinedTextField(
+            value = value,
+            onValueChange = { value = it; onChange(it) },
+            modifier = Modifier.fillMaxWidth(),
+            label = { Text(label) },
+            supportingText = { Text(key, style = MaterialTheme.typography.labelSmall) },
+            singleLine = true,
+        )
     }
 }
 

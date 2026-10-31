@@ -9,6 +9,9 @@ plugins {
 // and to bundle SimpleFPEWrapper.
 def mobileGlPrebuiltLibsDir = (findProperty('mobilegl.prebuiltLibsDir') ?: System.getenv('ORG_GRADLE_PROJECT_mobilegl.prebuiltLibsDir') ?: '').toString().trim()
 def mobileGlUseSfpew = (findProperty('mobilegl.sfpew') ?: (mobileGlPrebuiltLibsDir ? 'true' : 'false')).toString().toBoolean()
+// ANGLE is a launcher-provided GLES implementation. It is on by default in the
+// UI/renderer name; build with -Pmobilegl.angle=false for a non-ANGLE variant.
+def mobileGlUseAngle = (findProperty('mobilegl.angle') ?: 'true').toString().toBoolean()
 
 def mobileGlEnvString = { backendType ->
     def env = [
@@ -48,6 +51,16 @@ def mobileGlAbiFilters = {
 // output: a JSON document stored in @string/config and referenced from the
 // "fclPlugin_V2" manifest meta-data. The launcher substitutes the "**|" prefix with
 // the plugin's real nativeLibraryDir at launch time.
+// "MobileGL-<Magma|Espryt>[-angle][-SFPEW]" is what launchers display.
+def mobileGlRendererDisplayName = { String backendType ->
+    def backend = backendType == 'DirectVulkan' ? 'Magma' : 'Espryt'
+    def name = 'MobileGL-' + backend
+    if (mobileGlUseAngle) name += '-angle'
+    if (mobileGlUseSfpew) name += '-SFPEW'
+    name
+}
+def mobileGlMinMCVer = mobileGlUseSfpew ? null : '1.17'
+def mobileGlMaxMCVer = mobileGlUseSfpew ? '1.16.5' : null
 def mobileGlRendererConfig = { String backendType ->
     def values = ['DirectGLES', 'DirectVulkan']
     def env = [
@@ -78,14 +91,14 @@ def mobileGlRendererConfig = { String backendType ->
             ? '**|libRendererProxy.so'
             : (mobileGlUseSfpew ? '**|libSimpleFPEWrapper.so' : '**|libMobileGL.so')
     def config = [
-            displayName    : mobileGlUseSfpew ? 'MobileGL SFPEW' : 'MobileGL',
+            displayName    : mobileGlRendererDisplayName(backendType),
             rendererId     : 'opengles3',
             rendererGLPath : glLib,
             rendererEGLPath: glLib,
             dlopenLibPaths : [],
             env            : env,
-            minMCVer       : null,
-            maxMCVer       : null,
+            minMCVer       : mobileGlMinMCVer,
+            maxMCVer       : mobileGlMaxMCVer,
     ]
     groovy.json.JsonOutput.toJson(config).replace('"', '\\"')
 }
@@ -177,9 +190,11 @@ android {
             resValue 'string', 'mobilegl_default_backend', 'DirectGLES'
             resValue 'string', 'config', mobileGlRendererConfig('DirectGLES')
             manifestPlaceholders = [
-                    appLabel: 'MobileGL Espryt',
-                    des     : 'MobileGL Espryt',
-                    renderer: !mobileGlPrebuiltLibsDir.isEmpty() ? 'MobileGL Proxy:libRendererProxy.so:/libRendererProxy.so' : (mobileGlUseSfpew ? 'MobileGL SFPEW:libSimpleFPEWrapper.so:/libSimpleFPEWrapper.so' : 'MobileGL Espryt:libMobileGL.so:/libMobileGL.so'),
+                    appLabel: 'MobileGL_UI',
+                    des     : '来自 MobileGL_UI',
+                    renderer: !mobileGlPrebuiltLibsDir.isEmpty() ? mobileGlRendererDisplayName('DirectGLES') + ':libRendererProxy.so:/libRendererProxy.so' : (mobileGlUseSfpew ? mobileGlRendererDisplayName('DirectGLES') + ':libSimpleFPEWrapper.so:/libSimpleFPEWrapper.so' : mobileGlRendererDisplayName('DirectGLES') + ':libMobileGL.so:/libMobileGL.so'),
+                    minMCVer: mobileGlMinMCVer ?: '',
+                    maxMCVer: mobileGlMaxMCVer ?: '',
                     boatEnv : env,
                     pojavEnv: env,
             ]
@@ -191,9 +206,11 @@ android {
             resValue 'string', 'mobilegl_default_backend', 'DirectVulkan'
             resValue 'string', 'config', mobileGlRendererConfig('DirectVulkan')
             manifestPlaceholders = [
-                    appLabel: 'MobileGL Magma',
-                    des     : 'MobileGL Magma',
-                    renderer: !mobileGlPrebuiltLibsDir.isEmpty() ? 'MobileGL Proxy:libRendererProxy.so:/libRendererProxy.so' : (mobileGlUseSfpew ? 'MobileGL SFPEW:libSimpleFPEWrapper.so:/libSimpleFPEWrapper.so' : 'MobileGL Magma:libMobileGL.so:/libMobileGL.so'),
+                    appLabel: 'MobileGL_UI',
+                    des     : '来自 MobileGL_UI',
+                    renderer: !mobileGlPrebuiltLibsDir.isEmpty() ? mobileGlRendererDisplayName('DirectVulkan') + ':libRendererProxy.so:/libRendererProxy.so' : (mobileGlUseSfpew ? mobileGlRendererDisplayName('DirectVulkan') + ':libSimpleFPEWrapper.so:/libSimpleFPEWrapper.so' : mobileGlRendererDisplayName('DirectVulkan') + ':libMobileGL.so:/libMobileGL.so'),
+                    minMCVer: mobileGlMinMCVer ?: '',
+                    maxMCVer: mobileGlMaxMCVer ?: '',
                     boatEnv : env,
                     pojavEnv: env,
             ]
