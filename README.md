@@ -28,6 +28,31 @@ loading the renderer:
 `MOBILEGL_*` / `LIBGL_*` keys are also exported before loading, and
 `MOBILEGL_CONFIG_FILE` points the latest MobileGL at the same file.
 
+## 2026-11-01 device fix
+
+The game process loads the plugin library by absolute path, but its linker
+namespace does not search the plugin APK's `nativeLibraryDir` for bare
+`dlopen("libMobileGL.so")` / `dlopen("libSfpew_real.so")` calls. The proxy now
+resolves its own directory with `dladdr()` and loads both sibling libraries by
+absolute path; `SFPEW_EGL` is also set to the absolute MobileGL path.
+
+Symptom before the fix (game logcat):
+
+```
+RendererProxy: SFPEW enabled but libSfpew_real.so failed:
+  dlopen failed: library "libSfpew_real.so" not found
+RendererProxy: libMobileGL.so not loadable:
+  dlopen failed: library "libMobileGL.so" not found
+renderer proxy ready: mode=sfpew target=0x0 missing=2900/2900
+```
+
+After the fix the app process log is:
+
+```
+RendererProxy: SFPEW enabled: .../libSfpew_real.so loaded, backend=.../libMobileGL.so
+RendererProxy: renderer proxy ready: mode=sfpew ... missing=0/2900
+```
+
 ## Signing
 
 Debug APKs are signed with the machine/runner debug keystore. Uninstall an APK

@@ -7,6 +7,7 @@
 #include <android/log.h>
 #include <dlfcn.h>
 #include <fcntl.h>
+#include <limits.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -27,6 +28,29 @@
 // entry points that the backend may not implement.
 static uintptr_t proxy_missing(void) {
     return 0;
+}
+
+static char g_lib_dir[PATH_MAX];
+
+static const char *sibling_path(const char *name, char *out, size_t out_len) {
+    if (g_lib_dir[0] && name[0] != '/') {
+        snprintf(out, out_len, "%s/%s", g_lib_dir, name);
+        return out;
+    }
+    snprintf(out, out_len, "%s", name);
+    return out;
+}
+
+static void *dlopen_sibling(const char *name) {
+    void *handle = dlopen(name, RTLD_NOW | RTLD_LOCAL);
+    if (handle) return handle;
+    if (g_lib_dir[0] && name[0] != '/') {
+        char path[PATH_MAX];
+        snprintf(path, sizeof(path), "%s/%s", g_lib_dir, name);
+        handle = dlopen(path, RTLD_NOW | RTLD_LOCAL);
+        if (handle) return handle;
+    }
+    return NULL;
 }
 
 static void trim(char *s) {
@@ -132,6 +156,14 @@ static void *memfd_load(const char *path) {
 }
 
 __attribute__((constructor)) static void init_renderer_proxy(void) {
+    Dl_info self_info;
+    if (dladdr((void *)&init_renderer_proxy, &self_info) && self_info.dli_fname) {
+        snprintf(g_lib_dir, sizeof(g_lib_dir), "%s", self_info.dli_fname);
+        char *slash = strrchr(g_lib_dir, '/');
+        if (slash) *slash = 0;
+    }
+    if (!g_lib_dir[0]) snprintf(g_lib_dir, sizeof(g_lib_dir), "/data/app");
+    LOGI("proxy library dir: %s", g_lib_dir);
     char mode[16];
     char so[512];
     int file_ok = read_config(mode, sizeof(mode), so, sizeof(so));
@@ -141,27 +173,42 @@ __attribute__((constructor)) static void init_renderer_proxy(void) {
     // New MobileGL builds read KEY=value files natively through this variable.
     if (!getenv("MOBILEGL_CONFIG_FILE")) setenv("MOBILEGL_CONFIG_FILE", "/sdcard/MobileGL/runtime.conf", 0);
     if (strcmp(mode, "sfpew") == 0) {
-        // SFPEW branch: load the wrapper and tell it which MobileGL backend to use.
-        if (so[0]) setenv("SFPEW_EGL", so, 1);
-        target = dlopen("libSfpew_real.so", RTLD_NOW | RTLD_LOCAL);
+        // SFPEW branch: load the wrapper by an absolute sibling path. The game
+        // process does not put the plugin APK's lib dir on the default linker
+        // search path, so dlopen("libSfpew_real.so") alone fails there.
+        char sfpew_path[PATH_MAX];
+        sibling_path("libSfpew_real.so", sfpew_path, sizeof(sfpew_path));
+        target = dlopen(sfpew_path, RTLD_NOW | RTLD_LOCAL);
+        if (!target) {
+            target = dlopen("libSfpew_real.so", RTLD_NOW | RTLD_LOCAL);
+        }
+        char backend_path[PATH_MAX];
+        if (so[0]) {
+            sibling_path(so, backend_path, sizeof(backend_path));
+        } else {
+            sibling_path("libMobileGL.so", backend_path, sizeof(backend_path));
+        }
+        setenv("SFPEW_EGL", backend_path, 1);
         if (target) {
-            LOGI("SFPEW enabled: libSfpew_real.so loaded, backend=%s", so[0] ? so : "libMobileGL.so");
+            LOGI("SFPEW enabled: %s loaded, backend=%s", sfpew_path, backend_path);
         } else {
             LOGE("SFPEW enabled but libSfpew_real.so failed: %s; using direct MobileGL", dlerror());
         }
-        direct = dlopen("libMobileGL.so", RTLD_NOW | RTLD_LOCAL);
+        direct = dlopen_sibling("libMobileGL.so");
         if (!direct) LOGE("libMobileGL.so not loadable: %s", dlerror());
         if (!target) target = direct;
     } else {
         // Direct branch: do not touch libSfpew_real.so at all.
         LOGI("SFPEW disabled (config=%s): loading MobileGL directly", file_ok ? "file" : "default");
         if (so[0]) {
-            target = strchr(so, '/') ? memfd_load(so) : dlopen(so, RTLD_NOW | RTLD_LOCAL);
-            if (target) LOGI("direct renderer loaded: %s", so);
-            else LOGE("cannot load direct renderer %s: %s", so, dlerror());
+            char direct_path[PATH_MAX];
+            sibling_path(so, direct_path, sizeof(direct_path));
+            target = strchr(so, '/') ? memfd_load(so) : dlopen_sibling(so);
+            if (target) LOGI("direct renderer loaded: %s", direct_path);
+            else LOGE("cannot load direct renderer %s: %s", direct_path, dlerror());
         }
         if (!target) {
-            target = dlopen("libMobileGL.so", RTLD_NOW | RTLD_LOCAL);
+            target = dlopen_sibling("libMobileGL.so");
             if (target) LOGI("direct renderer loaded: libMobileGL.so");
             else LOGE("libMobileGL.so not loadable: %s", dlerror());
         }
