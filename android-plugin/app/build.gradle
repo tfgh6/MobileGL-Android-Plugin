@@ -7,7 +7,7 @@ plugins {
 // When set, the APK packages .so files from this directory (arm64-v8a/...)
 // instead of building :MobileGL from source. Used to ship official CI .so files
 // and to bundle SimpleFPEWrapper.
-def mobileGlPrebuiltLibsDir = (findProperty('mobilegl.prebuiltLibsDir') ?: '').toString().trim()
+def mobileGlPrebuiltLibsDir = (findProperty('mobilegl.prebuiltLibsDir') ?: System.getenv('ORG_GRADLE_PROJECT_mobilegl.prebuiltLibsDir') ?: '').toString().trim()
 def mobileGlUseSfpew = (findProperty('mobilegl.sfpew') ?: (mobileGlPrebuiltLibsDir ? 'true' : 'false')).toString().toBoolean()
 
 def mobileGlEnvString = { backendType ->
