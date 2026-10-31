@@ -24,7 +24,7 @@ rootProject.name = 'MobileGLPlugin'
 include ':app'
 
 // Standalone plugin repo (CI) uses prebuilt libs and has no MobileGL source tree.
-def prebuiltLibs = providers.gradleProperty('mobilegl.prebuiltLibsDir').orNull
+def prebuiltLibs = System.getenv('ORG_GRADLE_PROJECT_mobilegl.prebuiltLibsDir') ?: providers.gradleProperty('mobilegl.prebuiltLibsDir').orNull
 if (!prebuiltLibs) {
     include ':MobileGL'
     project(':MobileGL').projectDir = file('..')
