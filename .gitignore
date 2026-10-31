@@ -1,0 +1,9 @@
+# Gradle / Android build outputs
+android-plugin/.gradle/
+android-plugin/build/
+android-plugin/app/build/
+android-plugin/app/.cxx/
+android-plugin/.kotlin/
+android-plugin/local.properties
+*.log
+*.apk

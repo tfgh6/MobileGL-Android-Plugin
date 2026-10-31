@@ -1,0 +1,31 @@
+pluginManagement {
+    repositories {
+        // China-friendly mirrors first; fall back to the canonical repositories.
+        maven { url 'https://maven.aliyun.com/repository/google' }
+        maven { url 'https://maven.aliyun.com/repository/gradle-plugin' }
+        maven { url 'https://maven.aliyun.com/repository/public' }
+        google()
+        mavenCentral()
+        gradlePluginPortal()
+    }
+}
+
+dependencyResolutionManagement {
+    repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
+    repositories {
+        maven { url 'https://maven.aliyun.com/repository/google' }
+        maven { url 'https://maven.aliyun.com/repository/public' }
+        google()
+        mavenCentral()
+    }
+}
+
+rootProject.name = 'MobileGLPlugin'
+include ':app'
+
+// Standalone plugin repo (CI) uses prebuilt libs and has no MobileGL source tree.
+def prebuiltLibs = providers.gradleProperty('mobilegl.prebuiltLibsDir').orNull
+if (!prebuiltLibs) {
+    include ':MobileGL'
+    project(':MobileGL').projectDir = file('..')
+}

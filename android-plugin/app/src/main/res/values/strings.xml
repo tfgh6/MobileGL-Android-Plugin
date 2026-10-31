@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">MobileGL</string>
+
+    <!-- Titles used by RendererPlugin-v2 config (Zalith Launcher). -->
+    <string name="mobilegl_backend_type_title">Rendering backend</string>
+    <string name="mobilegl_disable_timerquery_title">Disable GPU timer queries</string>
+    <string name="mobilegl_disable_subgroup_title">Disable Vulkan subgroup operations</string>
+    <string name="mobilegl_r11g11b10f_fallback_title">R11G11B10F fallback</string>
+    <string name="sfpew_backend_title">SFPEW backend</string>
+    <string name="sfpew_relaxed_context_title">SFPEW relaxed context</string>
+    <string name="sfpew_no_multidrawarrays_title">SFPEW disable MultiDrawArrays</string>
+    <string name="sfpew_no_list_batch_title">SFPEW disable list batching</string>
+</resources>
