@@ -27,3 +27,21 @@ absolute path; set `SFPEW_EGL` to the absolute MobileGL path as well.
 `/sdcard/MobileGL/runtime.conf` is read by the proxy; keys are exported before
 loading. `MOBILEGL_CONFIG_FILE` is pointed at the same file so MobileGL reads
 it natively.
+## 2026-11-01 26.3 Vulkan skin observation (no repro after reboot)
+
+During the three-run comparison, Minecraft 26.3 with the DirectVulkan backend
+showed the default skin once, while DirectGLES showed the custom skin. After
+rebooting the phone, the same 26.3 + DirectVulkan run loaded the custom skin
+correctly and the issue did not reproduce.
+
+Post-reboot log confirms the intended path:
+
+```
+RendererProxy: mode=direct, libMobileGL.so loaded by absolute path
+MobileGL: Active backend type set to DirectVulkan
+MobileGL: Renderer Name: Magma / Backend Name: Direct (Vulkan)
+```
+
+Conclusion: transient process/driver cache state, not a code regression. No
+proxy or backend change was made for this observation; leave the shader/texture
+cache untouched unless it reproduces consistently.
