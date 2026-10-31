@@ -159,9 +159,9 @@ fun DriverScreen(
             }
         }
 
-        SectionCard("驱动包（PanVK / Vulkan ICD 预留）") {
+        SectionCard("驱动包（PanVK / Vulkan ICD · 未完善）") {
             Text(
-                "带 driver.json 的 zip：安装、校验、生成 ICD。PanVK 阶段接入 loader 后才会影响游戏。",
+                "带 driver.json 的 zip：安装、校验、生成 ICD。功能尚未完善，PanVK loader 接入前不会影响游戏。",
                 style = MaterialTheme.typography.bodySmall,
             )
             Spacer(Modifier.height(8.dp))

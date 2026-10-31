@@ -41,6 +41,7 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -372,6 +373,7 @@ private data class DeviceInfo(
     val gles: String,
     val vulkan: String,
     val memory: String,
+    val coreVersion: String,
 )
 
 private fun deviceInfo(context: Context, report: SelfTestResult?, glInfo: GlInfoProbe.Info?): DeviceInfo {
@@ -380,24 +382,27 @@ private fun deviceInfo(context: Context, report: SelfTestResult?, glInfo: GlInfo
     val glesRenderer = glesReport?.renderer.orEmpty()
     val vulkanRenderer = vulkanReport?.renderer.orEmpty()
 
-    val gpu = Regex("Mali-[A-Za-z0-9-]+(?: MC\\d+)?").find(vulkanRenderer)?.value
-        ?: Regex("Mali-[A-Za-z0-9-]+(?: MC\\d+)?").find(glesRenderer)?.value
-        ?: (vulkanRenderer.substringBefore('(').trim().ifEmpty { "未知 GPU" })
-    val gles = Regex("OpenGL ES [0-9.]+").find(glesRenderer)?.value ?: "未检测到"
-    val api = Regex("instance API ([0-9.]+)").find(
-        vulkanReport?.checks?.firstOrNull { it.name.contains("Vulkan instance") }?.detail.orEmpty()
-    )?.groupValues?.getOrNull(1)
+    val gpu = vulkanRenderer.substringBefore(" (").trim().ifEmpty {
+        glesRenderer.substringBefore(" (").trim().ifEmpty {
+            glInfo?.renderer.orEmpty().ifBlank { "未知 GPU" }
+        }
+    }
+    val gles = glesRenderer.ifBlank { glInfo?.version.orEmpty().ifBlank { "未检测到" } }
     val vulkan = when {
         vulkanReport == null -> "未检测到"
         !vulkanReport.available -> "不可用"
-        api != null -> "Vulkan " + api
-        else -> "Vulkan"
+        vulkanRenderer.isBlank() -> "Vulkan"
+        else -> vulkanRenderer
     }
+    val versionDetail = (vulkanReport?.checks.orEmpty() + glesReport?.checks.orEmpty())
+        .firstOrNull { it.name.contains("reported GL_VERSION", true) }?.detail.orEmpty()
+    val core = Regex("MobileGL\\s+([0-9][^,\\s]*)").find(versionDetail)?.groupValues?.getOrNull(1)
+    val coreVersion = core?.removePrefix("v")?.ifBlank { null } ?: BuildConfig.VERSION_NAME
     val am = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
     val mi = ActivityManager.MemoryInfo()
     am.getMemoryInfo(mi)
     val memory = String.format(Locale.US, "%.1f GB", mi.totalMem / 1024.0 / 1024.0 / 1024.0)
-    return DeviceInfo(gpu.ifBlank { "未知 GPU" }, gles, vulkan, memory)
+    return DeviceInfo(gpu, gles, vulkan, memory, coreVersion)
 }
 
 @Composable
@@ -418,10 +423,14 @@ private fun HomeTab(
     val info = remember(report, glInfo) { deviceInfo(context, report, glInfo) }
     val authorized = hasAllFilesAccess()
     val sfpewActive = config.sfpewEnabled && BuildConfig.SFPEW_BUNDLED
-    val summary = buildString {
-        append(if (sfpewActive) "SFPEW" else "MobileGL")
-        if (info.gles != "未检测到") append(" · ").append(info.gles)
-        if (info.vulkan != "未检测到") append(" · ").append(info.vulkan)
+    val summary = when (config.backend) {
+        "DirectVulkan" -> "MobileGL-Magma"
+        "DirectGLES" -> buildString {
+            append("MobileGL-Espryt")
+            if (config.env["MOBILEGL_ESPRYT_USE_ANGLE"] == "1") append("-angle")
+            if (sfpewActive) append("-SFPEW")
+        }
+        else -> "MobileGL"
     }
 
     Column(
@@ -437,7 +446,7 @@ private fun HomeTab(
             Text("GL", fontSize = 40.sp, fontWeight = FontWeight.Bold, color = ORANGE)
         }
         Text(
-            "v" + BuildConfig.VERSION_NAME,
+            "v" + info.coreVersion,
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(top = 4.dp),
@@ -483,33 +492,7 @@ private fun HomeTab(
             }
         }
 
-        Spacer(Modifier.height(12.dp))
-        if (BuildConfig.SFPEW_BUNDLED) {
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(18.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 12.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Column(Modifier.weight(1f)) {
-                        Text("启用 SFPEW 包装器", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
-                        Text("由 libRendererProxy 启动时读取；切换后重启游戏生效", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                    }
-                    Switch(checked = config.sfpewEnabled, onCheckedChange = onToggleSfpew)
-                }
-            }
-        }
-
         Spacer(Modifier.height(20.dp))
-        SectionLabel("工具")
-        ActionRow("驱动管理", "驱动包、外部 .so 导入/更新", onOpenDrivers)
-        ActionRow("启动配置", "runtime.conf 与环境变量", onOpenConfig)
-        ActionRow("驱动自检", "失败项、替代方案与影响说明", onOpenSelfTest)
-
-        Spacer(Modifier.height(10.dp))
         Text(
             "设备：" + Build.MODEL + " · Android " + Build.VERSION.RELEASE + " · 驱动包 " + drivers.size + " 个 · 外部库 " + externalCount + " 个",
             style = MaterialTheme.typography.labelSmall,
@@ -555,7 +538,9 @@ private fun DeviceRow(label: String, value: String) {
             value,
             style = MaterialTheme.typography.bodyMedium,
             textAlign = TextAlign.End,
-            modifier = Modifier.weight(2.2f),
+            maxLines = 1,
+            softWrap = false,
+            modifier = Modifier.weight(2.2f).horizontalScroll(rememberScrollState()),
         )
     }
 }

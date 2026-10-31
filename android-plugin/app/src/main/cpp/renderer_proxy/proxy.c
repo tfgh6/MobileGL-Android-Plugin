@@ -83,7 +83,7 @@ static int read_config(char *mode, size_t mode_len, char *so, size_t so_len) {
     FILE *file = fopen(path, "r");
     if (!file) {
         LOGE("cannot read %s, using env/defaults", path);
-        if (!mode[0]) snprintf(mode, mode_len, "sfpew");
+        if (!mode[0]) snprintf(mode, mode_len, "direct");
         return 0;
     }
     char line[1024];

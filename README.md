@@ -18,15 +18,12 @@ Download the APK from the workflow run artifact.
 ## Launcher-facing renderer metadata
 
 - App label (the launcher's "来自 ..." summary): `MobileGL_UI`.
-- Renderer display name: `MobileGL-<Magma|Espryt>[-angle][-SFPEW]`.
-  - `-angle` is included by default; build with `-Pmobilegl.angle=false` for a
-    non-ANGLE variant.
-  - `-SFPEW` is included when the APK bundles SimpleFPEWrapper.
-- Version bounds advertised to the launcher:
-  - SFPEW build: min unlimited, max `1.16.5`
-  - non-SFPEW build: min `1.17`, max unlimited
-- New MobileGL options are exposed in the plugin's "全部选项" config page
-  (texture view, Magma/Espryt toggles, pipeline stats, etc.).
+- Renderer display name: `MobileGL`.
+- No MS/MC version bounds are advertised.
+- Default SFPEW state is **off**; the APK still bundles the wrapper so it can be
+  enabled explicitly.
+- MobileGL options are split in the app into 通用配置, 按后端配置 and
+  SFPEW 后端.
 
 ## Runtime configuration
 

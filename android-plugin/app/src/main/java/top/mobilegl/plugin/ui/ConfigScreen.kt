@@ -104,38 +104,18 @@ fun ConfigScreen(
             }
         }
 
-        SectionLabel("全部选项")
+        SectionLabel("通用配置")
         InfoCard {
             Text(
-                "这里是完整配置项（不是常用项）；点选后仍要点“保存配置”写入文件。",
+                "通用项；点选后仍要点“保存配置”写入文件。",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Spacer(Modifier.height(8.dp))
-            OptionSelect(
-                label = "渲染后端",
-                options = listOf("DirectVulkan", "DirectGLES"),
-                value = readKey(text, "MOBILEGL_BACKEND_TYPE", "DirectVulkan"),
-                onSelect = { text = setKey(text, "MOBILEGL_BACKEND_TYPE", it) },
-            )
-            OptionSelect(
-                label = "SFPEW 后端",
-                options = listOf("libMobileGL.so", "libEGL.so"),
-                value = readKey(text, "SFPEW_EGL", "libMobileGL.so"),
-                onSelect = { text = setKey(text, "SFPEW_EGL", it) },
-            )
             OptionToggle("禁用 GPU 计时器查询", "MOBILEGL_DISABLE_TIMERQUERY", text) { text = setKey(text, "MOBILEGL_DISABLE_TIMERQUERY", onOff(it)) }
             OptionToggle("禁用 Vulkan subgroup", "MOBILEGL_DISABLE_SUBGROUP", text) { text = setKey(text, "MOBILEGL_DISABLE_SUBGROUP", onOff(it)) }
-            OptionToggle("R11G11B10F 回退格式", "MOBILEGL_VULKAN_R11G11B10F_FALLBACK", text) { text = setKey(text, "MOBILEGL_VULKAN_R11G11B10F_FALLBACK", onOff(it)) }
             OptionToggle("Coherent AS flush", "MOBILEGL_COHERENT_AS_FLUSH", text) { text = setKey(text, "MOBILEGL_COHERENT_AS_FLUSH", onOff(it)) }
             OptionToggle("宽松语义", "MOBILEGL_RELAXED_SEMANTICS", text) { text = setKey(text, "MOBILEGL_RELAXED_SEMANTICS", onOff(it)) }
-            OptionToggle("SFPEW 宽松上下文", "SFPEW_RELAXED_CONTEXT", text) { text = setKey(text, "SFPEW_RELAXED_CONTEXT", onOff(it)) }
-            OptionToggle("SFPEW 关闭 MultiDrawArrays", "SFPEW_NO_MULTIDRAWARRAYS", text) { text = setKey(text, "SFPEW_NO_MULTIDRAWARRAYS", onOff(it)) }
-            OptionToggle("SFPEW 关闭列表批处理", "SFPEW_NO_LIST_BATCH", text) { text = setKey(text, "SFPEW_NO_LIST_BATCH", onOff(it)) }
-            OptionToggle("SFPEW 手动 mip 生成", "SFPEW_MANUAL_MIPGEN", text) { text = setKey(text, "SFPEW_MANUAL_MIPGEN", onOff(it)) }
-
-            Spacer(Modifier.height(8.dp))
-            Text("通用（新增）", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
             OptionToggle("禁用 texture view", "MOBILEGL_DISABLE_TEXTURE_VIEW", text) { text = setKey(text, "MOBILEGL_DISABLE_TEXTURE_VIEW", onOff(it)) }
             OptionToggle("禁用大缓冲复用", "MOBILEGL_DISABLE_LARGE_BUFFER_ADOPTION", text) { text = setKey(text, "MOBILEGL_DISABLE_LARGE_BUFFER_ADOPTION", onOff(it)) }
             OptionToggle("异步着色器编译", "MOBILEGL_ASYNC_SHADER_COMPILE", text) { text = setKey(text, "MOBILEGL_ASYNC_SHADER_COMPILE", onOff(it)) }
@@ -144,9 +124,24 @@ fun ConfigScreen(
             OptionText("GPU 挂起预算 (ms)", "MOBILEGL_GPU_HANG_BUDGET_MS", text) { text = setKey(text, "MOBILEGL_GPU_HANG_BUDGET_MS", it) }
             OptionToggle("Shader cache", "MOBILEGL_SHADER_CACHE", text) { text = setKey(text, "MOBILEGL_SHADER_CACHE", onOff(it)) }
             OptionToggle("SPIR-V 校验", "MOBILEGL_ENABLE_SPIRV_VALIDATION", text) { text = setKey(text, "MOBILEGL_ENABLE_SPIRV_VALIDATION", onOff(it)) }
+            Spacer(Modifier.height(6.dp))
+            Text("诊断", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
+            OptionToggle("管道统计", "MOBILEGL_PIPE_STATS", text) { text = setKey(text, "MOBILEGL_PIPE_STATS", onOff(it)) }
+            OptionToggle("FPS 日志", "MOBILEGL_FPS_LOG", text) { text = setKey(text, "MOBILEGL_FPS_LOG", onOff(it)) }
+            OptionText("统计周期 (帧)", "MOBILEGL_PIPE_STATS_PERIOD", text) { text = setKey(text, "MOBILEGL_PIPE_STATS_PERIOD", it) }
+        }
 
-            Spacer(Modifier.height(8.dp))
-            Text("DirectVulkan / Magma（新增）", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
+        SectionLabel("按后端配置")
+        InfoCard {
+            OptionSelect(
+                label = "渲染后端",
+                options = listOf("DirectVulkan", "DirectGLES"),
+                value = readKey(text, "MOBILEGL_BACKEND_TYPE", "DirectVulkan"),
+                onSelect = { text = setKey(text, "MOBILEGL_BACKEND_TYPE", it) },
+            )
+            Spacer(Modifier.height(6.dp))
+            Text("DirectVulkan / Magma", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
+            OptionToggle("R11G11B10F 回退格式", "MOBILEGL_VULKAN_R11G11B10F_FALLBACK", text) { text = setKey(text, "MOBILEGL_VULKAN_R11G11B10F_FALLBACK", onOff(it)) }
             OptionToggle("额外交换链图像", "MOBILEGL_MAGMA_EXTRA_SWAPCHAIN_IMAGES", text) { text = setKey(text, "MOBILEGL_MAGMA_EXTRA_SWAPCHAIN_IMAGES", onOff(it)) }
             OptionToggle("分片拷贝", "MOBILEGL_MAGMA_SPLIT_SLICE_COPIES", text) { text = setKey(text, "MOBILEGL_MAGMA_SPLIT_SLICE_COPIES", onOff(it)) }
             OptionToggle("Pass 缓存", "MOBILEGL_MAGMA_PASS_CACHE", text) { text = setKey(text, "MOBILEGL_MAGMA_PASS_CACHE", onOff(it)) }
@@ -154,9 +149,8 @@ fun ConfigScreen(
             OptionToggle("禁用混合深度写入", "MOBILEGL_MAGMA_DISABLE_BLENDED_DEPTH_WRITE", text) { text = setKey(text, "MOBILEGL_MAGMA_DISABLE_BLENDED_DEPTH_WRITE", onOff(it)) }
             OptionText("Magma 帧在途数", "MOBILEGL_MAGMA_FRAMESINFLIGHT", text) { text = setKey(text, "MOBILEGL_MAGMA_FRAMESINFLIGHT", it) }
             OptionToggle("E5 raw reads", "MOBILEGL_MAGMA_E5_RAW_READS", text) { text = setKey(text, "MOBILEGL_MAGMA_E5_RAW_READS", onOff(it)) }
-
-            Spacer(Modifier.height(8.dp))
-            Text("DirectGLES / Espryt（新增）", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
+            Spacer(Modifier.height(6.dp))
+            Text("DirectGLES / Espryt", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
             OptionToggle("启用 texture view", "MOBILEGL_ESPRYT_ENABLE_TEXTURE_VIEW", text) { text = setKey(text, "MOBILEGL_ESPRYT_ENABLE_TEXTURE_VIEW", onOff(it)) }
             OptionToggle("使用 ANGLE", "MOBILEGL_ESPRYT_USE_ANGLE", text) { text = setKey(text, "MOBILEGL_ESPRYT_USE_ANGLE", onOff(it)) }
             OptionToggle("禁用上传环", "MOBILEGL_ESPRYT_DISABLE_UPLOAD_RING", text) { text = setKey(text, "MOBILEGL_ESPRYT_DISABLE_UPLOAD_RING", onOff(it)) }
@@ -164,12 +158,20 @@ fun ConfigScreen(
             OptionToggle("VAO shadow", "MOBILEGL_ESPRYT_VAO_SHADOW", text) { text = setKey(text, "MOBILEGL_ESPRYT_VAO_SHADOW", onOff(it)) }
             OptionToggle("延迟 geometry emits", "MOBILEGL_ESPRYT_DEFER_GEOMETRY_EMITS", text) { text = setKey(text, "MOBILEGL_ESPRYT_DEFER_GEOMETRY_EMITS", onOff(it)) }
             OptionText("上传环大小 (MiB)", "MOBILEGL_PIPE_INDEX_MIRROR_MB", text) { text = setKey(text, "MOBILEGL_PIPE_INDEX_MIRROR_MB", it) }
+        }
 
-            Spacer(Modifier.height(8.dp))
-            Text("诊断", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
-            OptionToggle("管道统计", "MOBILEGL_PIPE_STATS", text) { text = setKey(text, "MOBILEGL_PIPE_STATS", onOff(it)) }
-            OptionToggle("FPS 日志", "MOBILEGL_FPS_LOG", text) { text = setKey(text, "MOBILEGL_FPS_LOG", onOff(it)) }
-            OptionText("统计周期 (帧)", "MOBILEGL_PIPE_STATS_PERIOD", text) { text = setKey(text, "MOBILEGL_PIPE_STATS_PERIOD", it) }
+        SectionLabel("SFPEW 后端")
+        InfoCard {
+            OptionSelect(
+                label = "SFPEW 后端",
+                options = listOf("libMobileGL.so", "libEGL.so"),
+                value = readKey(text, "SFPEW_EGL", "libMobileGL.so"),
+                onSelect = { text = setKey(text, "SFPEW_EGL", it) },
+            )
+            OptionToggle("SFPEW 宽松上下文", "SFPEW_RELAXED_CONTEXT", text) { text = setKey(text, "SFPEW_RELAXED_CONTEXT", onOff(it)) }
+            OptionToggle("SFPEW 关闭 MultiDrawArrays", "SFPEW_NO_MULTIDRAWARRAYS", text) { text = setKey(text, "SFPEW_NO_MULTIDRAWARRAYS", onOff(it)) }
+            OptionToggle("SFPEW 关闭列表批处理", "SFPEW_NO_LIST_BATCH", text) { text = setKey(text, "SFPEW_NO_LIST_BATCH", onOff(it)) }
+            OptionToggle("SFPEW 手动 mip 生成", "SFPEW_MANUAL_MIPGEN", text) { text = setKey(text, "SFPEW_MANUAL_MIPGEN", onOff(it)) }
         }
 
         SectionLabel("原始文件")

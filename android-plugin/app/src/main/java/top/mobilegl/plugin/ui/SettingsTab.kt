@@ -181,16 +181,6 @@ fun SettingsTab(
             }
         }
 
-        SectionLabel("说明")
-        InfoCard {
-            Text(
-                "游戏内生效的配置以 Zalith/FCL 的插件设置为准（fclPlugin_V2 的选项会由启动器注入环境变量）。" +
-                    "本页开关同步写入 runtime.conf；官方 MobileGL 库不读取它，本项目补丁库/后续驱动会读取。",
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(vertical = 12.dp),
-            )
-        }
         Spacer(Modifier.height(24.dp))
     }
 }

@@ -9,9 +9,6 @@ plugins {
 // and to bundle SimpleFPEWrapper.
 def mobileGlPrebuiltLibsDir = (findProperty('mobilegl.prebuiltLibsDir') ?: System.getenv('ORG_GRADLE_PROJECT_mobilegl.prebuiltLibsDir') ?: '').toString().trim()
 def mobileGlUseSfpew = (findProperty('mobilegl.sfpew') ?: (mobileGlPrebuiltLibsDir ? 'true' : 'false')).toString().toBoolean()
-// ANGLE is a launcher-provided GLES implementation. It is on by default in the
-// UI/renderer name; build with -Pmobilegl.angle=false for a non-ANGLE variant.
-def mobileGlUseAngle = (findProperty('mobilegl.angle') ?: 'true').toString().toBoolean()
 
 def mobileGlEnvString = { backendType ->
     def env = [
@@ -51,16 +48,10 @@ def mobileGlAbiFilters = {
 // output: a JSON document stored in @string/config and referenced from the
 // "fclPlugin_V2" manifest meta-data. The launcher substitutes the "**|" prefix with
 // the plugin's real nativeLibraryDir at launch time.
-// "MobileGL-<Magma|Espryt>[-angle][-SFPEW]" is what launchers display.
-def mobileGlRendererDisplayName = { String backendType ->
-    def backend = backendType == 'DirectVulkan' ? 'Magma' : 'Espryt'
-    def name = 'MobileGL-' + backend
-    if (mobileGlUseAngle) name += '-angle'
-    if (mobileGlUseSfpew) name += '-SFPEW'
-    name
-}
-def mobileGlMinMCVer = mobileGlUseSfpew ? null : '1.17'
-def mobileGlMaxMCVer = mobileGlUseSfpew ? '1.16.5' : null
+// Launcher-facing renderer name is intentionally backend-agnostic.
+def mobileGlRendererDisplayName = { String backendType -> 'MobileGL' }
+def mobileGlMinMCVer = null
+def mobileGlMaxMCVer = null
 def mobileGlRendererConfig = { String backendType ->
     def values = ['DirectGLES', 'DirectVulkan']
     def env = [

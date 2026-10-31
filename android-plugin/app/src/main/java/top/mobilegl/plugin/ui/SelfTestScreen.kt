@@ -138,6 +138,8 @@ fun SelfTestScreen(
             return@LazyColumn
         }
 
+        item { SelfTestSummary(report) }
+
         items(report.backends, key = { it.backend + "|" + it.renderer }) { backend ->
             BackendCard(
                 backend = backend,
@@ -149,6 +151,34 @@ fun SelfTestScreen(
             RawReportCard(report = report, expanded = expanded, onToggle = { key ->
                 expanded = if (key in expanded) expanded - key else expanded + key
             })
+        }
+    }
+}
+
+@Composable
+private fun SelfTestSummary(report: SelfTestResult) {
+    val checks = report.backends.flatMap { it.checks }
+    val fails = checks.count { it.status.equals("FAIL", true) }
+    val warns = checks.count { it.status.equals("WARN", true) }
+    val passes = checks.count { it.status.equals("PASS", true) }
+    val bugs = report.backends.sumOf { it.knownDriverBugs.size }
+    val verdicts = report.backends.map { it.verdict.uppercase() }
+    val overall = when {
+        verdicts.any { it == "UNSUPPORTED" } || fails > 0 -> "存在失败项"
+        verdicts.any { it == "DEGRADED" } || warns > 0 -> "可用，部分降级"
+        else -> "可用"
+    }
+    val color = when (overall) {
+        "存在失败项" -> verdictColor("FAIL")
+        "可用，部分降级" -> verdictColor("WARN")
+        else -> verdictColor("PASS")
+    }
+    SectionCard("自检总结") {
+        Text("结论：" + overall, color = color, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyLarge)
+        Spacer(Modifier.height(6.dp))
+        Text("通过 " + passes + " 项 · 替代 " + warns + " 项 · 失败 " + fails + " 项", style = MaterialTheme.typography.bodySmall)
+        if (bugs > 0) {
+            Text("已知驱动问题 " + bugs + " 项（见下方 Known driver bugs）", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 }
