@@ -225,7 +225,7 @@ android {
         }
     }
 
-    def fixedDebugKeystore = file('debug.keystore')
+    def fixedDebugKeystore = file('../debug.keystore')
     if (fixedDebugKeystore.exists()) {
         signingConfigs {
             debug {
