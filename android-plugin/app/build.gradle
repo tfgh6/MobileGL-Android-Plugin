@@ -62,22 +62,16 @@ def mobileGlRendererConfig = { String backendType ->
              items: [defaultValue: backendType, values: values]],
             [type: 'ToggleableEnv', key: 'MOBILEGL_DISABLE_TIMERQUERY', value: '1',
              title: [key: 'mobilegl_disable_timerquery_title'], toggle: false],
-            [type: 'ToggleableEnv', key: 'MOBILEGL_DISABLE_SUBGROUP', value: '1',
-             title: [key: 'mobilegl_disable_subgroup_title'], toggle: false],
-            [type: 'ToggleableEnv', key: 'MOBILEGL_VULKAN_R11G11B10F_FALLBACK', value: '1',
+            [type: 'SelectableEnv', key: 'MOBILEGL_SUBGROUP_EMULATION',
+             title: [key: 'mobilegl_disable_subgroup_title'],
+             items: [defaultValue: 'Auto', values: ['Auto', 'ForceOn', 'ForceOff']]],
+            [type: 'ToggleableEnv', key: 'MOBILEGL_MAGMA_R11G11B10F_FALLBACK', value: '1',
              title: [key: 'mobilegl_r11g11b10f_fallback_title'], toggle: false],
+            [type: 'CustomizableEnv', key: 'MOBILEGL_FRAMES_IN_FLIGHT', defaultValue: '3'],
+            [type: 'ToggleableEnv', key: 'MOBILEGL_ESPRYT_USE_ANGLE', value: '1', toggle: false],
+            [type: 'ToggleableEnv', key: 'MOBILEGL_COHERENT_AS_FLUSH', value: '1', toggle: false],
+            [type: 'ToggleableEnv', key: 'MOBILEGL_RELAXED_SEMANTICS', value: '1', toggle: false],
     ]
-    if (mobileGlUseSfpew) {
-        env.add([type: 'SelectableEnv', key: 'SFPEW_EGL',
-                 title: [key: 'sfpew_backend_title'], check: true,
-                 items: [defaultValue: 'libMobileGL.so', values: ['libEGL.so', 'libMobileGL.so']]])
-        env.add([type: 'ToggleableEnv', key: 'SFPEW_RELAXED_CONTEXT', value: '1',
-                 title: [key: 'sfpew_relaxed_context_title'], toggle: false])
-        env.add([type: 'ToggleableEnv', key: 'SFPEW_NO_MULTIDRAWARRAYS', value: '1',
-                 title: [key: 'sfpew_no_multidrawarrays_title'], toggle: false])
-        env.add([type: 'ToggleableEnv', key: 'SFPEW_NO_LIST_BATCH', value: '1',
-                 title: [key: 'sfpew_no_list_batch_title'], toggle: false])
-    }
     def glLib = !mobileGlPrebuiltLibsDir.isEmpty()
             ? '**|libRendererProxy.so'
             : (mobileGlUseSfpew ? '**|libSimpleFPEWrapper.so' : '**|libMobileGL.so')
@@ -151,8 +145,8 @@ android {
         // strictly increasing across releases (monotonic within a month and
         // across month/year rollovers), so every build is an installable
         // upgrade. Max ~99_129999, well under Android's 2_100_000_000 ceiling.
-        versionCode 26070005
-        versionName '26.0.4'
+        versionCode 26070009
+        versionName '26.0.8'
 
         ndk {
             def abiFiltersOverride = mobileGlAbiFilters()

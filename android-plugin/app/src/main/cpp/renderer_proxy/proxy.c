@@ -32,6 +32,19 @@ static uintptr_t proxy_missing(void) {
 
 static char g_lib_dir[PATH_MAX];
 
+// Some applications probe GL_MAX_TEXTURE_SIZE before the backend has filled
+// in its dynamic limits. MobileGL then returns 0 and the caller falls back to
+// 16384; keep the probe useful by clamping only the zero case.
+static void (*g_real_glGetIntegerv)(uint32_t pname, int32_t *data);
+static void proxy_glGetIntegerv(uint32_t pname, int32_t *data) {
+    if (g_real_glGetIntegerv) g_real_glGetIntegerv(pname, data);
+    if (data && pname == 0x0D33 /* GL_MAX_TEXTURE_SIZE */ && *data <= 0) {
+        *data = 16384;
+        LOGE("GL_MAX_TEXTURE_SIZE probe returned 0; clamped to 16384");
+    }
+}
+
+
 static const char *sibling_path(const char *name, char *out, size_t out_len) {
     if (g_lib_dir[0] && name[0] != '/') {
         snprintf(out, out_len, "%s/%s", g_lib_dir, name);
@@ -223,6 +236,9 @@ __attribute__((constructor)) static void init_renderer_proxy(void) {
             if (missing < 8) LOGE("symbol not found in backend: %s", g_proxy_symbols[i].name);
             ++missing;
             *g_proxy_symbols[i].slot = (void *)proxy_missing;
+        } else if (strcmp(g_proxy_symbols[i].name, "glGetIntegerv") == 0) {
+            g_real_glGetIntegerv = (void (*)(uint32_t, int32_t *))fn;
+            *g_proxy_symbols[i].slot = (void *)proxy_glGetIntegerv;
         } else {
             *g_proxy_symbols[i].slot = fn;
         }
