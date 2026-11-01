@@ -602,7 +602,10 @@ private fun InfoTab(
         SectionLabel("应用")
         InfoCard {
             InfoRow("版本", BuildConfig.VERSION_NAME)
-            LinkRow("GitHub 开源页面", "MobileGL / SimpleFPEWrapper") {
+            LinkRow("GitHub 仓库", "github.com/tfgh6/MobileGL-Android-Plugin") {
+                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/tfgh6/MobileGL-Android-Plugin")))
+            }
+            LinkRow("上游项目", "MobileGL / SimpleFPEWrapper") {
                 context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://github.com/MobileGL-Dev")))
             }
             LinkRow("驱动自检", "查看完整报告与说明", onOpenSelfTest)

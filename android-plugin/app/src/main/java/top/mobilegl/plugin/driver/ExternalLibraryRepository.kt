@@ -136,7 +136,23 @@ class ExternalLibraryRepository(private val context: Context) {
 fun scanMobileGlVersion(file: File): Pair<String?, String?> {
     val bytes = runCatching { file.readBytes() }.getOrNull() ?: return null to null
     val text = String(bytes, Charsets.ISO_8859_1)
-    val version = Regex("MobileGL\\s+([0-9][0-9A-Za-z._+\\-]{1,40})").find(text)?.groupValues?.getOrNull(1)
-    val commit = Regex("GIT@([0-9a-fA-F]{6,40})").find(text)?.groupValues?.getOrNull(1)
-    return version to commit
+    val versions = Regex("MobileGL\\s+([0-9][0-9A-Za-z._+\\-]{0,40})").findAll(text).toList()
+    val commits = Regex("GIT@([0-9a-fA-F]{6,40})").findAll(text).toList()
+    if (versions.isEmpty()) return null to commits.firstOrNull()?.groupValues?.getOrNull(1)
+    // Pick the version string closest to a GIT@ marker: large binaries contain
+    // unrelated "MobileGL <version>" strings in embedded docs/constants.
+    var bestVersion = versions.last()
+    var bestCommit: MatchResult? = commits.firstOrNull()
+    var bestDistance = Int.MAX_VALUE
+    for (version in versions) {
+        for (commit in commits) {
+            val distance = kotlin.math.abs(version.range.first - commit.range.first)
+            if (distance < bestDistance) {
+                bestDistance = distance
+                bestVersion = version
+                bestCommit = commit
+            }
+        }
+    }
+    return bestVersion.groupValues.getOrNull(1) to bestCommit?.groupValues?.getOrNull(1)
 }

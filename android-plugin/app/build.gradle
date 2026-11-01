@@ -151,8 +151,8 @@ android {
         // strictly increasing across releases (monotonic within a month and
         // across month/year rollovers), so every build is an installable
         // upgrade. Max ~99_129999, well under Android's 2_100_000_000 ceiling.
-        versionCode mobileGlVersionMajor * 1000000 + mobileGlVersionMinor * 10000 + mobileGlMonthlyRevision
-        versionName String.format('%d.%02d.%s', mobileGlVersionMajor, mobileGlVersionMinor, mobileGlGitShortHash)
+        versionCode 26070002
+        versionName '26.0.1'
 
         ndk {
             def abiFiltersOverride = mobileGlAbiFilters()

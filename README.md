@@ -1,75 +1,46 @@
 # MobileGL Android Plugin
 
-FCL / ZalithLauncher2 renderer plugin for MobileGL, with the MobileGlues-style UI,
-runtime renderer proxy, configurable SimpleFPEWrapper loading and the upstream
-Driver POST self-test.
+MobileGL renderer plugin for FCL / ZalithLauncher2 / Pojav-style launchers.
 
-## Build (GitHub Actions)
+## Features
 
-The workflow `Build MobileGL Plugin APK` builds the plugin with prebuilt native libs
-in `prebuilt/arm64-v8a`:
+- MobileGlues-style light UI with three tabs: 首页 / 设置 / 信息.
+- Runtime renderer dispatcher (`libRendererProxy.so`) that loads MobileGL from the plugin APK without relying on the launcher's linker search path.
+- Configurable backend: DirectVulkan (`Magma`), DirectGLES (`Espryt`), optional ANGLE for DirectGLES.
+- Optional SimpleFPEWrapper (SFPEW) for Minecraft 1.16.5 and older; off by default.
+- Runtime configuration file at `/sdcard/MobileGL/runtime.conf`, shared by the plugin, proxy and MobileGL.
+- Import and activate external `libMobileGL.so` builds; imports are validated as AArch64 MobileGL libraries.
+- Driver POST self-test with checks, known driver bugs, format capability matrix and a summary.
+- Full device information from EGL and Vulkan (GPU name, GL version, Vulkan API, driver version).
+- First-launch all-files permission prompt with automatic restart after granting.
 
-- `libMobileGL.so` — latest MobileGL dev CI build (d6fd101d)
-- `libSfpew_real.so` — SimpleFPEWrapper (bundled as libSfpew_real.so)
-- `libRendererProxy.so` — runtime dispatcher
+## Launcher-facing metadata
 
-Download the APK from the workflow run artifact.
-
-## Launcher-facing renderer metadata
-
-- App label (the launcher's "来自 ..." summary): `MobileGL_UI`.
+- App label: `MobileGL_UI` (the launcher displays the plugin as `来自 MobileGL_UI`).
 - Renderer display name: `MobileGL`.
-- No MS/MC version bounds are advertised.
-- Default SFPEW state is **off**; the APK still bundles the wrapper so it can be
-  enabled explicitly.
-- MobileGL options are split in the app into 通用配置, 按后端配置 and
-  SFPEW 后端.
+- No Minecraft version bounds are declared.
 
-## Runtime configuration
+## Build
 
-The plugin writes `/sdcard/MobileGL/runtime.conf`. The proxy reads it before
-loading the renderer:
+The GitHub Actions workflow `.github/workflows/build-plugin.yml` builds the APK with prebuilt native libraries from `prebuilt/arm64-v8a`: `libMobileGL.so`, `libSfpew_real.so`, `libRendererProxy.so`.
 
-- `RENDERER_MODE=direct` / `SFPEW_ENABLED=0`: load MobileGL directly; SFPEW is never touched.
-- `RENDERER_MODE=sfpew` / `SFPEW_ENABLED=1`: load SimpleFPEWrapper and point it at MobileGL.
-- No config file: keep the previous default (load SFPEW).
-- A present config file without either key: stay direct.
+Download the APK from the workflow run artifacts.
 
-`MOBILEGL_*` / `LIBGL_*` keys are also exported before loading, and
-`MOBILEGL_CONFIG_FILE` points the latest MobileGL at the same file.
+## Configuration
 
-## 2026-11-01 device fix
+`/sdcard/MobileGL/runtime.conf` is read by the proxy before loading the renderer:
 
-The game process loads the plugin library by absolute path, but its linker
-namespace does not search the plugin APK's `nativeLibraryDir` for bare
-`dlopen("libMobileGL.so")` / `dlopen("libSfpew_real.so")` calls. The proxy now
-resolves its own directory with `dladdr()` and loads both sibling libraries by
-absolute path; `SFPEW_EGL` is also set to the absolute MobileGL path.
+- `RENDERER_MODE=direct` / `SFPEW_ENABLED=0`: load MobileGL directly; SFPEW is not touched.
+- `RENDERER_MODE=sfpew` / `SFPEW_ENABLED=1`: load SimpleFPEWrapper backed by MobileGL.
+- Default is direct / SFPEW off.
 
-Symptom before the fix (game logcat):
+The plugin also exports `MOBILEGL_*` / `LIBGL_*` keys from the file and points `MOBILEGL_CONFIG_FILE` at it.
 
-```
-RendererProxy: SFPEW enabled but libSfpew_real.so failed:
-  dlopen failed: library "libSfpew_real.so" not found
-RendererProxy: libMobileGL.so not loadable:
-  dlopen failed: library "libMobileGL.so" not found
-renderer proxy ready: mode=sfpew target=0x0 missing=2900/2900
-```
+## License
 
-After the fix the app process log is:
+GNU Lesser General Public License v3.0. See [LICENSE](LICENSE).
 
-```
-RendererProxy: SFPEW enabled: .../libSfpew_real.so loaded, backend=.../libMobileGL.so
-RendererProxy: renderer proxy ready: mode=sfpew ... missing=0/2900
-```
+Upstream projects:
 
-## Signing
-
-- `android-plugin/debug.keystore` (alias `mobilegl`, password `android`) is
-  committed so local builds and GitHub Actions produce the same signature.
-- APKs signed with an older, different debug key require one uninstall before
-  the first install of this build.
-
-
-Debug APKs are signed with the machine/runner debug keystore. Uninstall an APK
-signed by a different debug key before installing a new one.
+- https://github.com/MobileGL-Dev/MobileGL
+- https://github.com/MobileGL-Dev/SimpleFPEWrapper
