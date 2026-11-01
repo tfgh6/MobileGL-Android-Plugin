@@ -41,7 +41,6 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.layout.safeDrawing
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -271,15 +270,7 @@ fun MobileGlPluginApp() {
                             probing = probing,
                             drivers = drivers,
                             externalCount = externalLibraries.size,
-                            onToggleSfpew = { enabled ->
-                                val updatedEnv = LinkedHashMap(config.env)
-                                updatedEnv["SFPEW_ENABLED"] = if (enabled) "1" else "0"
-                                persist(config.copy(sfpewEnabled = enabled, env = updatedEnv))
-                            },
                             onOpenSettings = { lastTab = 1; dest = Dest.Settings },
-                            onOpenDrivers = { lastTab = 0; dest = Dest.Drivers },
-                            onOpenConfig = { lastTab = 0; dest = Dest.ConfigFile },
-                            onOpenSelfTest = { lastTab = 0; dest = Dest.SelfTest },
                             glInfo = glInfo,
                         )
                         Dest.Settings -> SettingsTab(
@@ -315,7 +306,13 @@ fun MobileGlPluginApp() {
                             onClearActive = { persist(config.copy(activeDriverId = null, activeIcdPath = null)) },
                             onActivateLibrary = { lib ->
                                 val shared = lib?.sharedFile?.absolutePath ?: lib?.file?.absolutePath
-                                persist(config.copy(activeRendererLibPath = shared, selfTestLibraryPath = lib?.file?.absolutePath))
+                                val updated = config.copy(activeRendererLibPath = shared, selfTestLibraryPath = lib?.file?.absolutePath)
+                                persist(updated)
+                                scope.launch {
+                                    probing = true
+                                    report = selfTestRepository.run(updated, lib?.file?.absolutePath)
+                                    probing = false
+                                }
                             },
                         )
                         Dest.ConfigFile -> ConfigScreen(
@@ -374,6 +371,7 @@ private data class DeviceInfo(
     val vulkan: String,
     val memory: String,
     val coreVersion: String,
+    val coreCommit: String?,
 )
 
 private fun deviceInfo(context: Context, report: SelfTestResult?, glInfo: GlInfoProbe.Info?): DeviceInfo {
@@ -398,11 +396,12 @@ private fun deviceInfo(context: Context, report: SelfTestResult?, glInfo: GlInfo
         .firstOrNull { it.name.contains("reported GL_VERSION", true) }?.detail.orEmpty()
     val core = Regex("MobileGL\\s+([0-9][^,\\s]*)").find(versionDetail)?.groupValues?.getOrNull(1)
     val coreVersion = core?.removePrefix("v")?.ifBlank { null } ?: BuildConfig.VERSION_NAME
+    val coreCommit = Regex("GIT@([0-9a-fA-F]+)").find(versionDetail)?.groupValues?.getOrNull(1)
     val am = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
     val mi = ActivityManager.MemoryInfo()
     am.getMemoryInfo(mi)
     val memory = String.format(Locale.US, "%.1f GB", mi.totalMem / 1024.0 / 1024.0 / 1024.0)
-    return DeviceInfo(gpu, gles, vulkan, memory, coreVersion)
+    return DeviceInfo(gpu, gles, vulkan, memory, coreVersion, coreCommit)
 }
 
 @Composable
@@ -412,11 +411,7 @@ private fun HomeTab(
     probing: Boolean,
     drivers: List<DriverPack>,
     externalCount: Int,
-    onToggleSfpew: (Boolean) -> Unit,
     onOpenSettings: () -> Unit,
-    onOpenDrivers: () -> Unit,
-    onOpenConfig: () -> Unit,
-    onOpenSelfTest: () -> Unit,
     glInfo: GlInfoProbe.Info?,
 ) {
     val context = LocalContext.current
@@ -446,7 +441,7 @@ private fun HomeTab(
             Text("GL", fontSize = 40.sp, fontWeight = FontWeight.Bold, color = ORANGE)
         }
         Text(
-            "v" + info.coreVersion,
+            "v" + info.coreVersion + (info.coreCommit?.let { " (" + it + ")" } ?: ""),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(top = 4.dp),
@@ -538,9 +533,7 @@ private fun DeviceRow(label: String, value: String) {
             value,
             style = MaterialTheme.typography.bodyMedium,
             textAlign = TextAlign.End,
-            maxLines = 1,
-            softWrap = false,
-            modifier = Modifier.weight(2.2f).horizontalScroll(rememberScrollState()),
+            modifier = Modifier.weight(2.2f),
         )
     }
 }

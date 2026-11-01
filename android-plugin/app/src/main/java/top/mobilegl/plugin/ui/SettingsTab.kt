@@ -104,9 +104,10 @@ fun SettingsTab(
                 SwitchRow(
                     title = "启用 SFPEW 包装器",
                     subtitle = if (config.sfpewEnabled)
-                        "libRendererProxy 在启动游戏时按配置选择 SFPEW 或直连；切换后重启游戏生效"
+                        "此选项可使 MobileGL 运行在 1.16.5 及以下版本；打开后不建议启动高版本。\n" +
+                            "libRendererProxy 会按配置选择 SFPEW，切换后重启游戏生效"
                     else
-                        "当前配置按直连 MobileGL 使用；代理会在下次启动游戏时读取",
+                        "当前配置按直连 MobileGL 使用；打开后可使 MobileGL 运行在 1.16.5 及以下版本，不建议启动高版本",
                     checked = config.sfpewEnabled,
                 ) {
                     val updatedEnv = LinkedHashMap(config.env)
@@ -122,38 +123,6 @@ fun SettingsTab(
             }
         }
 
-        SectionLabel("高级设置 · MobileGL")
-        InfoCard {
-            SwitchRow("禁用 GPU 计时器查询", "影响性能面板；MobileGL 会关闭 timer query", isOn(env("MOBILEGL_DISABLE_TIMERQUERY"))) {
-                setEnv("MOBILEGL_DISABLE_TIMERQUERY", onOff(it))
-            }
-            DividerLine()
-            SwitchRow("禁用 Vulkan subgroup", "缺失时 MobileGL 用替代实现", isOn(env("MOBILEGL_DISABLE_SUBGROUP"))) {
-                setEnv("MOBILEGL_DISABLE_SUBGROUP", onOff(it))
-            }
-            DividerLine()
-            SwitchRow("R11G11B10F 回退格式", "部分驱动不支持该格式时启用", isOn(env("MOBILEGL_VULKAN_R11G11B10F_FALLBACK"))) {
-                setEnv("MOBILEGL_VULKAN_R11G11B10F_FALLBACK", onOff(it))
-            }
-        }
-
-        if (config.sfpewEnabled && BuildConfig.SFPEW_BUNDLED) {
-            SectionLabel("高级设置 · SFPEW")
-            InfoCard {
-                SwitchRow("宽松上下文", "允许更宽松的上下文创建（兼容旧模组）", isOn(env("SFPEW_RELAXED_CONTEXT"))) {
-                    setEnv("SFPEW_RELAXED_CONTEXT", onOff(it))
-                }
-                DividerLine()
-                SwitchRow("关闭 MultiDrawArrays", "个别驱动上可规避批处理问题", isOn(env("SFPEW_NO_MULTIDRAWARRAYS"))) {
-                    setEnv("SFPEW_NO_MULTIDRAWARRAYS", onOff(it))
-                }
-                DividerLine()
-                SwitchRow("关闭列表批处理", "排查显示列表相关问题时使用", isOn(env("SFPEW_NO_LIST_BATCH"))) {
-                    setEnv("SFPEW_NO_LIST_BATCH", onOff(it))
-                }
-            }
-        }
-
         SectionLabel("组件")
         InfoCard {
             LinkRow("驱动包", drivers.size.toString() + " 个 · 管理 PanVK / Vulkan ICD", onOpenDrivers)
@@ -165,6 +134,8 @@ fun SettingsTab(
 
         SectionLabel("配置")
         InfoCard {
+            LinkRow("全部配置", "通用 / 按后端 / SFPEW 选项（原高级设置）", onOpenConfigFile)
+            DividerLine()
             LinkRow("启动配置文件", "编辑 /sdcard/MobileGL/runtime.conf", onOpenConfigFile)
             DividerLine()
             InfoRow("运行时配置", if (runtime.sharedWritten) "已写入共享路径" else "仅私有副本（共享路径不可写）")
