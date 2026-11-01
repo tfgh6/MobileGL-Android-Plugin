@@ -18,6 +18,8 @@ data class PluginConfig(
     val activeIcdPath: String? = null,
     val selfTestLibraryPath: String? = null,
     val activeRendererLibPath: String? = null,
+    val activeRendererVersion: String? = null,
+    val activeRendererCommit: String? = null,
     val env: Map<String, String> = defaultEnv("DirectVulkan"),
     val theme: String = "dark",
 ) {
@@ -31,6 +33,8 @@ data class PluginConfig(
         root.put("activeIcdPath", activeIcdPath ?: JSONObject.NULL)
         root.put("selfTestLibraryPath", selfTestLibraryPath ?: JSONObject.NULL)
         root.put("activeRendererLibPath", activeRendererLibPath ?: JSONObject.NULL)
+        root.put("activeRendererVersion", activeRendererVersion ?: JSONObject.NULL)
+        root.put("activeRendererCommit", activeRendererCommit ?: JSONObject.NULL)
         val envJson = JSONObject()
         env.forEach { (key, value) -> envJson.put(key, value) }
         root.put("env", envJson)
@@ -69,6 +73,8 @@ data class PluginConfig(
                 activeIcdPath = if (root.isNull("activeIcdPath")) null else root.optString("activeIcdPath").ifEmpty { null },
                 selfTestLibraryPath = if (root.isNull("selfTestLibraryPath")) null else root.optString("selfTestLibraryPath").ifEmpty { null },
                 activeRendererLibPath = if (root.isNull("activeRendererLibPath")) null else root.optString("activeRendererLibPath").ifEmpty { null },
+                activeRendererVersion = if (root.isNull("activeRendererVersion")) null else root.optString("activeRendererVersion").ifEmpty { null },
+                activeRendererCommit = if (root.isNull("activeRendererCommit")) null else root.optString("activeRendererCommit").ifEmpty { null },
                 env = env,
                 theme = root.optString("theme", "dark"),
             )

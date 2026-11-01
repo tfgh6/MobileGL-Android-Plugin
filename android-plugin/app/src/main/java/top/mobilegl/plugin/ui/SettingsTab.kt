@@ -123,20 +123,9 @@ fun SettingsTab(
             }
         }
 
-        SectionLabel("组件")
-        InfoCard {
-            LinkRow("驱动包", drivers.size.toString() + " 个 · 管理 PanVK / Vulkan ICD", onOpenDrivers)
-            DividerLine()
-            LinkRow("外部库", externalLibraries.size.toString() + " 个 · 导入 .so 用于自检/更新", onOpenDrivers)
-            DividerLine()
-            LinkRow("驱动自检", "查看完整报告与失败项说明", onOpenSelfTest)
-        }
-
         SectionLabel("配置")
         InfoCard {
             LinkRow("全部配置", "通用 / 按后端 / SFPEW 选项（原高级设置）", onOpenConfigFile)
-            DividerLine()
-            LinkRow("启动配置文件", "编辑 /sdcard/MobileGL/runtime.conf", onOpenConfigFile)
             DividerLine()
             InfoRow("运行时配置", if (runtime.sharedWritten) "已写入共享路径" else "仅私有副本（共享路径不可写）")
             if (!hasAllFilesAccess()) {
@@ -150,6 +139,15 @@ fun SettingsTab(
                     }
                 })
             }
+        }
+
+        SectionLabel("组件")
+        InfoCard {
+            LinkRow("驱动包", drivers.size.toString() + " 个 · 管理 PanVK / Vulkan ICD", onOpenDrivers)
+            DividerLine()
+            LinkRow("外部库", externalLibraries.size.toString() + " 个 · 导入 .so 用于自检/更新", onOpenDrivers)
+            DividerLine()
+            LinkRow("驱动自检", "查看完整报告与失败项说明", onOpenSelfTest)
         }
 
         Spacer(Modifier.height(24.dp))

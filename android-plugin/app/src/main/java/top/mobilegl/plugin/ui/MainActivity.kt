@@ -43,4 +43,16 @@ class MainActivity : ComponentActivity() {
         }
         setContent { MobileGlPluginApp() }
     }
+
+    override fun onResume() {
+        super.onResume()
+        val prefs = getSharedPreferences("mobilegl_plugin", MODE_PRIVATE)
+        val granted = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            android.os.Environment.isExternalStorageManager()
+        } else true
+        if (granted && prefs.getBoolean("awaiting_restart", false)) {
+            prefs.edit().putBoolean("awaiting_restart", false).apply()
+            recreate()
+        }
+    }
 }

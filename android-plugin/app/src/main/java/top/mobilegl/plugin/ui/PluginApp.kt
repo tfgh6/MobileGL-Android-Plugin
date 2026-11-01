@@ -48,6 +48,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -94,6 +95,7 @@ import top.mobilegl.plugin.driver.DriverPack
 import top.mobilegl.plugin.driver.DriverRepository
 import top.mobilegl.plugin.driver.ExternalLibrary
 import top.mobilegl.plugin.driver.ExternalLibraryRepository
+import top.mobilegl.plugin.driver.scanMobileGlVersion
 import top.mobilegl.plugin.selftest.BackendReport
 import top.mobilegl.plugin.selftest.GlInfoProbe
 import top.mobilegl.plugin.selftest.SelfTestRepository
@@ -195,6 +197,41 @@ fun MobileGlPluginApp() {
                 }
                 runtimeStatus = status
             }
+        }
+
+        val prefs = remember { context.getSharedPreferences("mobilegl_plugin", Context.MODE_PRIVATE) }
+        var showPermissionDialog by remember {
+            mutableStateOf(!hasAllFilesAccess() && !prefs.getBoolean("permission_prompted", false))
+        }
+        if (showPermissionDialog) {
+            AlertDialog(
+                onDismissRequest = { showPermissionDialog = false },
+                title = { Text("需要文件访问权限") },
+                text = {
+                    Text(
+                        "MobileGL 需要“所有文件访问权限”来写入 /sdcard/MobileGL/runtime.conf，" +
+                            "启动器和游戏进程才能读取配置。授权后应用会自动重启。"
+                    )
+                },
+                confirmButton = {
+                    TextButton(onClick = {
+                        prefs.edit().putBoolean("permission_prompted", true).putBoolean("awaiting_restart", true).apply()
+                        showPermissionDialog = false
+                        val packageUri = Uri.parse("package:" + context.packageName)
+                        runCatching {
+                            context.startActivity(Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, packageUri))
+                        }.onFailure {
+                            context.startActivity(Intent(Settings.ACTION_MANAGE_ALL_FILES_ACCESS_PERMISSION))
+                        }
+                    }) { Text("去授权") }
+                },
+                dismissButton = {
+                    TextButton(onClick = {
+                        prefs.edit().putBoolean("permission_prompted", true).apply()
+                        showPermissionDialog = false
+                    }) { Text("稍后") }
+                },
+            )
         }
 
         val tabIndex = TABS.indexOfFirst { it.dest == dest }
@@ -306,7 +343,13 @@ fun MobileGlPluginApp() {
                             onClearActive = { persist(config.copy(activeDriverId = null, activeIcdPath = null)) },
                             onActivateLibrary = { lib ->
                                 val shared = lib?.sharedFile?.absolutePath ?: lib?.file?.absolutePath
-                                val updated = config.copy(activeRendererLibPath = shared, selfTestLibraryPath = lib?.file?.absolutePath)
+                                val (version, commit) = lib?.file?.let { scanMobileGlVersion(it) } ?: (null to null)
+                                val updated = config.copy(
+                                    activeRendererLibPath = shared,
+                                    selfTestLibraryPath = lib?.file?.absolutePath,
+                                    activeRendererVersion = version,
+                                    activeRendererCommit = commit,
+                                )
                                 persist(updated)
                                 scope.launch {
                                     probing = true
@@ -374,7 +417,7 @@ private data class DeviceInfo(
     val coreCommit: String?,
 )
 
-private fun deviceInfo(context: Context, report: SelfTestResult?, glInfo: GlInfoProbe.Info?): DeviceInfo {
+private fun deviceInfo(context: Context, report: SelfTestResult?, glInfo: GlInfoProbe.Info?, config: PluginConfig): DeviceInfo {
     val glesReport = report?.backends?.firstOrNull { it.backend.contains("gles", true) }
     val vulkanReport = report?.backends?.firstOrNull { it.backend.contains("vulkan", true) }
     val glesRenderer = glesReport?.renderer.orEmpty()
@@ -395,8 +438,11 @@ private fun deviceInfo(context: Context, report: SelfTestResult?, glInfo: GlInfo
     val versionDetail = (vulkanReport?.checks.orEmpty() + glesReport?.checks.orEmpty())
         .firstOrNull { it.name.contains("reported GL_VERSION", true) }?.detail.orEmpty()
     val core = Regex("MobileGL\\s+([0-9][^,\\s]*)").find(versionDetail)?.groupValues?.getOrNull(1)
-    val coreVersion = core?.removePrefix("v")?.ifBlank { null } ?: BuildConfig.VERSION_NAME
-    val coreCommit = Regex("GIT@([0-9a-fA-F]+)").find(versionDetail)?.groupValues?.getOrNull(1)
+    val coreVersion = config.activeRendererVersion
+        ?: core?.removePrefix("v")?.ifBlank { null }
+        ?: BuildConfig.VERSION_NAME
+    val coreCommit = config.activeRendererCommit
+        ?: Regex("GIT@([0-9a-fA-F]+)").find(versionDetail)?.groupValues?.getOrNull(1)
     val am = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
     val mi = ActivityManager.MemoryInfo()
     am.getMemoryInfo(mi)
@@ -415,11 +461,11 @@ private fun HomeTab(
     glInfo: GlInfoProbe.Info?,
 ) {
     val context = LocalContext.current
-    val info = remember(report, glInfo) { deviceInfo(context, report, glInfo) }
+    val info = remember(report, glInfo, config.activeRendererVersion, config.activeRendererCommit) { deviceInfo(context, report, glInfo, config) }
     val authorized = hasAllFilesAccess()
     val sfpewActive = config.sfpewEnabled && BuildConfig.SFPEW_BUNDLED
     val summary = when (config.backend) {
-        "DirectVulkan" -> "MobileGL-Magma"
+        "DirectVulkan" -> if (sfpewActive) "MobileGL-Magma-SFPEW" else "MobileGL-Magma"
         "DirectGLES" -> buildString {
             append("MobileGL-Espryt")
             if (config.env["MOBILEGL_ESPRYT_USE_ANGLE"] == "1") append("-angle")
