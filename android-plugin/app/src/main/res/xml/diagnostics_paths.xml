@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Paths exposed through the diagnostics FileProvider (authority ${applicationId}.diagnostics).
+     Only exported report files under cacheDir/diagnostics/ are shareable. -->
+<paths xmlns:android="http://schemas.android.com/apk/res/android">
+    <cache-path name="diagnostics" path="diagnostics/" />
+</paths>

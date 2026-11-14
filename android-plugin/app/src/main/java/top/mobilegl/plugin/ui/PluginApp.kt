@@ -71,6 +71,7 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.core.content.FileProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -178,10 +179,10 @@ fun MobileGlPluginApp() {
         val selfTestRepository = remember { SelfTestRepository(context) }
         val runtimeWriter = remember { RuntimeConfigWriter(context) }
         val turnipRepository = remember { TurnipRepository(context) }
-        val diagnostics = remember { DiagnosticsLog(context) }
         val scope = rememberCoroutineScope()
 
         var config by remember { mutableStateOf(store.load()) }
+        val diagnostics = remember { DiagnosticsLog(context).apply { setEnabled(config.diagnosticsEnabled) } }
         var drivers by remember { mutableStateOf(driverRepository.list()) }
         var externalLibraries by remember { mutableStateOf(externalRepository.list()) }
         var runtimeStatus by remember { mutableStateOf(runtimeWriter.write(config)) }
@@ -192,6 +193,10 @@ fun MobileGlPluginApp() {
         var glInfo by remember { mutableStateOf<GlInfoProbe.Info?>(null) }
         var turnipDrivers by remember { mutableStateOf<List<TurnipDriver>>(emptyList()) }
         var turnipScanning by remember { mutableStateOf(true) }
+
+        LaunchedEffect(config.diagnosticsEnabled) {
+            diagnostics.setEnabled(config.diagnosticsEnabled)
+        }
 
         LaunchedEffect(Unit) {
             glInfo = withContext(Dispatchers.IO) { GlInfoProbe.query() }
@@ -291,6 +296,7 @@ fun MobileGlPluginApp() {
 
         // Facts embedded into the diagnostics report shared from the Info tab.
         val diagnosticsState = remember(
+            config.diagnosticsEnabled,
             config.backend,
             config.sfpewEnabled,
             config.turnipEnabled,
@@ -300,6 +306,7 @@ fun MobileGlPluginApp() {
             runtimeStatus.sharedWritten,
         ) {
             DiagnosticsSnapshot(
+                diagnosticsEnabled = config.diagnosticsEnabled,
                 backend = config.backend,
                 sfpewEnabled = config.sfpewEnabled,
                 turnipEnabled = config.turnipEnabled,
@@ -439,6 +446,16 @@ fun MobileGlPluginApp() {
                             lastReport = report,
                             diagnostics = diagnostics,
                             diagnosticsState = diagnosticsState,
+                            onToggleDiagnostics = { enabled ->
+                                if (enabled) {
+                                    diagnostics.setEnabled(true)
+                                    diagnostics.record("ui", "诊断日志记录已开启")
+                                } else {
+                                    diagnostics.record("ui", "诊断日志记录已关闭")
+                                    diagnostics.setEnabled(false)
+                                }
+                                persist(config.copy(diagnosticsEnabled = enabled))
+                            },
                             onOpenSelfTest = { lastTab = 2; dest = Dest.SelfTest },
                             onShareReport = { shareReport(context, selfTestRepository) },
                         )
@@ -736,6 +753,7 @@ private fun InfoTab(
     lastReport: SelfTestResult?,
     diagnostics: DiagnosticsLog,
     diagnosticsState: DiagnosticsSnapshot,
+    onToggleDiagnostics: (Boolean) -> Unit,
     onOpenSelfTest: () -> Unit,
     onShareReport: () -> Unit,
 ) {
@@ -762,7 +780,12 @@ private fun InfoTab(
         }
         SectionLabel("诊断日志")
         InfoCard {
-            DiagnosticsPanel(diagnostics = diagnostics, state = diagnosticsState)
+            DiagnosticsPanel(
+                diagnostics = diagnostics,
+                state = diagnosticsState,
+                enabled = config.diagnosticsEnabled,
+                onToggleEnabled = onToggleDiagnostics,
+            )
         }
         SectionLabel("关于")
         InfoCard {
@@ -777,7 +800,12 @@ private fun InfoTab(
 }
 
 @Composable
-private fun DiagnosticsPanel(diagnostics: DiagnosticsLog, state: DiagnosticsSnapshot) {
+private fun DiagnosticsPanel(
+    diagnostics: DiagnosticsLog,
+    state: DiagnosticsSnapshot,
+    enabled: Boolean,
+    onToggleEnabled: (Boolean) -> Unit,
+) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var status by remember { mutableStateOf(diagnostics.status()) }
@@ -787,6 +815,7 @@ private fun DiagnosticsPanel(diagnostics: DiagnosticsLog, state: DiagnosticsSnap
     var fullText by remember { mutableStateOf<String?>(null) }
     var showFull by remember { mutableStateOf(false) }
     var confirmClear by remember { mutableStateOf(false) }
+    var confirmShareDisabled by remember { mutableStateOf(false) }
 
     fun reload() {
         scope.launch {
@@ -798,39 +827,92 @@ private fun DiagnosticsPanel(diagnostics: DiagnosticsLog, state: DiagnosticsSnap
         }
     }
 
-    fun snapshotText(onReady: (String) -> Unit) {
+    fun previewText(onReady: (String) -> Unit) {
         scope.launch {
             busy = true
-            val text = withContext(Dispatchers.IO) { diagnostics.snapshot(state) }
+            val text = withContext(Dispatchers.IO) { diagnostics.previewReport(state) }
             busy = false
             onReady(text)
         }
     }
 
-    fun copySnapshot() {
-        snapshotText { text ->
+    fun copySummary() {
+        scope.launch {
+            busy = true
+            val text = withContext(Dispatchers.IO) { diagnostics.shortSummary(state) }
+            busy = false
             val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
             if (clipboard == null) {
                 message = "无法访问剪贴板"
             } else {
-                clipboard.setPrimaryClip(ClipData.newPlainText("MobileGL 诊断日志", text))
-                message = "已复制诊断日志（" + text.length + " 字符）"
+                clipboard.setPrimaryClip(ClipData.newPlainText("MobileGL 诊断摘要", text))
+                diagnostics.record("share", "复制诊断摘要到剪贴板（" + text.length + " 字符）")
+                message = "已复制诊断摘要（" + text.length + " 字符）；完整日志请用“分享日志”导出文件"
             }
         }
     }
 
-    fun shareSnapshot() {
-        snapshotText { text ->
-            val intent = Intent(Intent.ACTION_SEND).apply {
-                type = "text/plain"
-                putExtra(Intent.EXTRA_SUBJECT, "MobileGL 诊断日志")
-                putExtra(Intent.EXTRA_TEXT, text)
+    fun exportAndShare() {
+        scope.launch {
+            busy = true
+            val outcome = withContext(Dispatchers.IO) {
+                runCatching {
+                    val file = diagnostics.exportReport(state)
+                    diagnostics.record(
+                        "share",
+                        "导出诊断日志: " + file.name + " (" + diagnostics.formatSize(file.length()) + ")",
+                    )
+                    FileProvider.getUriForFile(
+                        context,
+                        context.packageName + DiagnosticsLog.FILE_PROVIDER_AUTHORITY_SUFFIX,
+                        file,
+                    )
+                }
             }
-            context.startActivity(Intent.createChooser(intent, "分享诊断日志"))
+            busy = false
+            outcome.fold(
+                onSuccess = { uri ->
+                    val intent = Intent(Intent.ACTION_SEND).apply {
+                        type = "text/plain"
+                        putExtra(Intent.EXTRA_SUBJECT, "MobileGL 诊断日志")
+                        putExtra(Intent.EXTRA_STREAM, uri)
+                        clipData = ClipData.newRawUri("MobileGL 诊断日志", uri)
+                        addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                    }
+                    context.startActivity(
+                        Intent.createChooser(intent, "分享诊断日志")
+                            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION),
+                    )
+                },
+                onFailure = { message = "导出诊断日志失败：" + (it.message ?: it.toString()) },
+            )
         }
+    }
+
+    fun shareFile() {
+        if (enabled) exportAndShare() else confirmShareDisabled = true
     }
 
     LaunchedEffect(Unit) { reload() }
+
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text("记录诊断日志", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
+            Text(
+                if (enabled) {
+                    "记录 Turnip 操作、导入结果与 runtime.conf 写入失败到 ui.log"
+                } else {
+                    "已关闭：不写新的 UI 日志（仍可分享已有日志与 game.log）"
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Switch(checked = enabled, onCheckedChange = onToggleEnabled)
+    }
 
     InfoRow("UI 日志", status.uiLogPath)
     InfoRow("大小", diagnostics.formatSize(status.uiLogSizeBytes))
@@ -856,13 +938,13 @@ private fun DiagnosticsPanel(diagnostics: DiagnosticsLog, state: DiagnosticsSnap
     )
     Spacer(Modifier.height(8.dp))
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Button(enabled = !busy, onClick = { shareSnapshot() }) { Text("分享日志") }
-        OutlinedButton(enabled = !busy, onClick = { copySnapshot() }) { Text("复制") }
+        Button(enabled = !busy, onClick = { shareFile() }) { Text("分享日志") }
+        OutlinedButton(enabled = !busy, onClick = { copySummary() }) { Text("复制摘要") }
     }
     Spacer(Modifier.height(8.dp))
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         OutlinedButton(enabled = !busy, onClick = {
-            snapshotText { text ->
+            previewText { text ->
                 fullText = text
                 showFull = true
             }
@@ -875,6 +957,20 @@ private fun DiagnosticsPanel(diagnostics: DiagnosticsLog, state: DiagnosticsSnap
         Text(it, style = MaterialTheme.typography.labelSmall, color = verdictColor("PASS"))
     }
 
+    if (confirmShareDisabled) {
+        AlertDialog(
+            onDismissRequest = { confirmShareDisabled = false },
+            title = { Text("诊断记录未开启") },
+            text = { Text("当前已关闭“记录诊断日志”，日志中不会包含新的 Turnip 操作记录。仍要导出并分享已有日志吗？") },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmShareDisabled = false
+                    exportAndShare()
+                }) { Text("仍要分享") }
+            },
+            dismissButton = { TextButton(onClick = { confirmShareDisabled = false }) { Text("取消") } },
+        )
+    }
     if (confirmClear) {
         AlertDialog(
             onDismissRequest = { confirmClear = false },
@@ -914,7 +1010,7 @@ private fun DiagnosticsPanel(diagnostics: DiagnosticsLog, state: DiagnosticsSnap
                     val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
                     if (clipboard != null) {
                         clipboard.setPrimaryClip(ClipData.newPlainText("MobileGL 诊断日志", text))
-                        message = "已复制诊断日志（" + text.length + " 字符）"
+                        message = "已复制日志预览（完整日志请用“分享日志”导出文件）"
                     }
                 }) { Text("复制") }
             },

@@ -44,6 +44,8 @@ class RuntimeConfigWriter(private val context: Context) {
             if (config.turnipEnabled) {
                 config.turnipDriverPath?.takeIf { it.isNotBlank() }?.let { appendLine("MOBILEGL_TURNIP_PATH=" + it) }
             }
+            // UI diagnostics recording; the native loader can mirror it into game.log.
+            appendLine("MOBILEGL_DIAG_LOG_ENABLED=" + if (config.diagnosticsEnabled) "1" else "0")
             config.activeRendererLibPath?.takeIf { it.isNotBlank() }?.let { appendLine("RENDERER_SO=" + it) }
         }
 

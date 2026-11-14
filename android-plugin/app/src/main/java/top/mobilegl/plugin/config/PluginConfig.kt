@@ -23,6 +23,7 @@ data class PluginConfig(
     val turnipEnabled: Boolean = false,
     val turnipDriverPath: String? = null,
     val turnipDriverVersion: String? = null,
+    val diagnosticsEnabled: Boolean = false,
     val env: Map<String, String> = defaultEnv("DirectVulkan"),
     val theme: String = "dark",
 ) {
@@ -41,6 +42,7 @@ data class PluginConfig(
         root.put("turnipEnabled", turnipEnabled)
         root.put("turnipDriverPath", turnipDriverPath ?: JSONObject.NULL)
         root.put("turnipDriverVersion", turnipDriverVersion ?: JSONObject.NULL)
+        root.put("diagnosticsEnabled", diagnosticsEnabled)
         val envJson = JSONObject()
         env.forEach { (key, value) -> envJson.put(key, value) }
         root.put("env", envJson)
@@ -84,6 +86,7 @@ data class PluginConfig(
                 turnipEnabled = root.optBoolean("turnipEnabled", false),
                 turnipDriverPath = if (root.isNull("turnipDriverPath")) null else root.optString("turnipDriverPath").ifEmpty { null },
                 turnipDriverVersion = if (root.isNull("turnipDriverVersion")) null else root.optString("turnipDriverVersion").ifEmpty { null },
+                diagnosticsEnabled = root.optBoolean("diagnosticsEnabled", false),
                 env = env,
                 theme = root.optString("theme", "dark"),
             )

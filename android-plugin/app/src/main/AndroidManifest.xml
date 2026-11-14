@@ -42,6 +42,18 @@
             android:exported="true"
             android:theme="@style/Theme.MobileGLPlugin.NoDisplay" />
 
+        <!-- Shares the combined diagnostics report as a .txt file (cacheDir/diagnostics/),
+             so long UI/game logs are not limited by the ACTION_SEND text extra. -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.diagnostics"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/diagnostics_paths" />
+        </provider>
+
         <!-- Zalith Launcher / RendererPlugin-v2 configuration -->
         <meta-data
             android:name="fclPlugin_V2"
