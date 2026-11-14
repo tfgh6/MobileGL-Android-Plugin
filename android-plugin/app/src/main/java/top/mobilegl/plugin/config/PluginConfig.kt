@@ -20,6 +20,9 @@ data class PluginConfig(
     val activeRendererLibPath: String? = null,
     val activeRendererVersion: String? = null,
     val activeRendererCommit: String? = null,
+    val turnipEnabled: Boolean = false,
+    val turnipDriverPath: String? = null,
+    val turnipDriverVersion: String? = null,
     val env: Map<String, String> = defaultEnv("DirectVulkan"),
     val theme: String = "dark",
 ) {
@@ -35,6 +38,9 @@ data class PluginConfig(
         root.put("activeRendererLibPath", activeRendererLibPath ?: JSONObject.NULL)
         root.put("activeRendererVersion", activeRendererVersion ?: JSONObject.NULL)
         root.put("activeRendererCommit", activeRendererCommit ?: JSONObject.NULL)
+        root.put("turnipEnabled", turnipEnabled)
+        root.put("turnipDriverPath", turnipDriverPath ?: JSONObject.NULL)
+        root.put("turnipDriverVersion", turnipDriverVersion ?: JSONObject.NULL)
         val envJson = JSONObject()
         env.forEach { (key, value) -> envJson.put(key, value) }
         root.put("env", envJson)
@@ -75,6 +81,9 @@ data class PluginConfig(
                 activeRendererLibPath = if (root.isNull("activeRendererLibPath")) null else root.optString("activeRendererLibPath").ifEmpty { null },
                 activeRendererVersion = if (root.isNull("activeRendererVersion")) null else root.optString("activeRendererVersion").ifEmpty { null },
                 activeRendererCommit = if (root.isNull("activeRendererCommit")) null else root.optString("activeRendererCommit").ifEmpty { null },
+                turnipEnabled = root.optBoolean("turnipEnabled", false),
+                turnipDriverPath = if (root.isNull("turnipDriverPath")) null else root.optString("turnipDriverPath").ifEmpty { null },
+                turnipDriverVersion = if (root.isNull("turnipDriverVersion")) null else root.optString("turnipDriverVersion").ifEmpty { null },
                 env = env,
                 theme = root.optString("theme", "dark"),
             )

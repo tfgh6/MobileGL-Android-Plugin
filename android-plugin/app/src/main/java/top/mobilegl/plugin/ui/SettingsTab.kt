@@ -44,6 +44,7 @@ fun SettingsTab(
     runtime: RuntimeConfigWriter.Status,
     drivers: List<DriverPack>,
     externalLibraries: List<ExternalLibrary>,
+    turnipSummary: String,
     onSave: (PluginConfig) -> Unit,
     onOpenConfigFile: () -> Unit,
     onOpenDrivers: () -> Unit,
@@ -143,6 +144,8 @@ fun SettingsTab(
 
         SectionLabel("组件")
         InfoCard {
+            LinkRow("骁龙 Turnip", turnipSummary, onOpenDrivers)
+            DividerLine()
             LinkRow("驱动包", drivers.size.toString() + " 个 · 管理 PanVK / Vulkan ICD", onOpenDrivers)
             DividerLine()
             LinkRow("外部库", externalLibraries.size.toString() + " 个 · 导入 .so 用于自检/更新", onOpenDrivers)

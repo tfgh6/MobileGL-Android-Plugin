@@ -95,6 +95,9 @@ import top.mobilegl.plugin.driver.DriverPack
 import top.mobilegl.plugin.driver.DriverRepository
 import top.mobilegl.plugin.driver.ExternalLibrary
 import top.mobilegl.plugin.driver.ExternalLibraryRepository
+import top.mobilegl.plugin.driver.TurnipDriver
+import top.mobilegl.plugin.driver.TurnipGpuKind
+import top.mobilegl.plugin.driver.TurnipRepository
 import top.mobilegl.plugin.driver.scanMobileGlVersion
 import top.mobilegl.plugin.selftest.BackendReport
 import top.mobilegl.plugin.selftest.GlInfoProbe
@@ -166,6 +169,7 @@ fun MobileGlPluginApp() {
         val externalRepository = remember { ExternalLibraryRepository(context) }
         val selfTestRepository = remember { SelfTestRepository(context) }
         val runtimeWriter = remember { RuntimeConfigWriter(context) }
+        val turnipRepository = remember { TurnipRepository(context) }
         val scope = rememberCoroutineScope()
 
         var config by remember { mutableStateOf(store.load()) }
@@ -177,9 +181,15 @@ fun MobileGlPluginApp() {
         var report by remember { mutableStateOf(selfTestRepository.cached()) }
         var probing by remember { mutableStateOf(report == null) }
         var glInfo by remember { mutableStateOf<GlInfoProbe.Info?>(null) }
+        var turnipDrivers by remember { mutableStateOf<List<TurnipDriver>>(emptyList()) }
+        var turnipScanning by remember { mutableStateOf(true) }
 
         LaunchedEffect(Unit) {
             glInfo = withContext(Dispatchers.IO) { GlInfoProbe.query() }
+            turnipDrivers = withContext(Dispatchers.IO) {
+                runCatching { turnipRepository.scan() }.getOrDefault(emptyList())
+            }
+            turnipScanning = false
             if (report == null) {
                 probing = true
                 report = selfTestRepository.run(config, config.selfTestLibraryPath ?: config.activeRendererLibPath)
@@ -196,6 +206,54 @@ fun MobileGlPluginApp() {
                     runtimeWriter.write(updated)
                 }
                 runtimeStatus = status
+            }
+        }
+
+        // --- Turnip (Mesa Freedreno) -------------------------------------------------
+        // Renderer strings the plugin already collects (EGL/GLES probe + Driver POST).
+        // Turnip may only be enabled on Adreno, with a Qualcomm platform fallback when the
+        // GPU name could not be read.
+        val gpuHints = remember(glInfo, report) {
+            buildList {
+                glInfo?.renderer?.takeIf { it.isNotBlank() }?.let { add(it) }
+                glInfo?.vendor?.takeIf { it.isNotBlank() }?.let { add(it) }
+                report?.backends?.forEach { backend ->
+                    backend.renderer.takeIf { it.isNotBlank() }?.let { add(it) }
+                }
+            }
+        }
+        val turnipGpu = remember(gpuHints) { turnipRepository.detectGpu(gpuHints) }
+
+        LaunchedEffect(turnipScanning, turnipDrivers, turnipGpu, config.turnipEnabled, config.turnipDriverPath, config.turnipDriverVersion) {
+            if (turnipScanning || !config.turnipEnabled) return@LaunchedEffect
+            // A positively detected non-Adreno GPU must never keep Turnip enabled.
+            if (turnipGpu.kind == TurnipGpuKind.Other) {
+                persist(config.copy(turnipEnabled = false))
+                return@LaunchedEffect
+            }
+            // Repair a stale selection: fall back to the bundled driver, otherwise disable.
+            val selected = turnipDrivers.firstOrNull { it.path == config.turnipDriverPath }
+                ?: turnipDrivers.firstOrNull { it.bundled }
+            if (selected == null) {
+                persist(config.copy(turnipEnabled = false, turnipDriverPath = null, turnipDriverVersion = null))
+            } else if (selected.path != config.turnipDriverPath || selected.version != config.turnipDriverVersion) {
+                persist(config.copy(turnipDriverPath = selected.path, turnipDriverVersion = selected.version))
+            }
+        }
+
+        val turnipSummary = remember(turnipDrivers, turnipGpu, config.turnipEnabled, config.turnipDriverPath) {
+            val selected = turnipDrivers.firstOrNull { it.path == config.turnipDriverPath }
+                ?: turnipDrivers.firstOrNull { it.bundled }
+            val gpuLabel = when (turnipGpu.kind) {
+                TurnipGpuKind.Adreno -> "Adreno"
+                TurnipGpuKind.Other -> "非 Adreno，不可用"
+                TurnipGpuKind.Unknown -> "GPU 未确认"
+            }
+            buildString {
+                append(if (config.turnipEnabled) "已启用 · Turnip" else "未启用 · 系统 Vulkan")
+                if (selected?.experimental == true) append(" · 外部实验（可能回退）")
+                selected?.version?.let { append(" · Mesa ").append(it) }
+                append(" · ").append(gpuLabel)
             }
         }
 
@@ -315,6 +373,7 @@ fun MobileGlPluginApp() {
                             runtime = runtimeStatus,
                             drivers = drivers,
                             externalLibraries = externalLibraries,
+                            turnipSummary = turnipSummary,
                             onSave = { persist(it) },
                             onOpenConfigFile = { lastTab = 1; dest = Dest.ConfigFile },
                             onOpenDrivers = { lastTab = 1; dest = Dest.Drivers },
@@ -329,12 +388,22 @@ fun MobileGlPluginApp() {
                         Dest.Drivers -> DriverScreen(
                             repository = driverRepository,
                             externalRepository = externalRepository,
+                            turnipRepository = turnipRepository,
                             drivers = drivers,
                             externalLibraries = externalLibraries,
+                            turnipDrivers = turnipDrivers,
+                            turnipGpu = turnipGpu,
+                            turnipLoading = turnipScanning,
+                            configFileShared = runtimeStatus.sharedWritten,
                             config = config,
                             onRefresh = {
                                 drivers = driverRepository.list()
                                 externalLibraries = externalRepository.list()
+                                scope.launch {
+                                    turnipDrivers = withContext(Dispatchers.IO) {
+                                        runCatching { turnipRepository.scan() }.getOrDefault(emptyList())
+                                    }
+                                }
                             },
                             onActivate = { pack ->
                                 val icd = runCatching { driverRepository.generateIcd(pack) }.getOrNull()
@@ -356,6 +425,15 @@ fun MobileGlPluginApp() {
                                     report = selfTestRepository.run(updated, lib?.file?.absolutePath)
                                     probing = false
                                 }
+                            },
+                            onTurnipChange = { enabled, path, version ->
+                                persist(
+                                    config.copy(
+                                        turnipEnabled = enabled,
+                                        turnipDriverPath = path,
+                                        turnipDriverVersion = version,
+                                    )
+                                )
                             },
                         )
                         Dest.ConfigFile -> ConfigScreen(
