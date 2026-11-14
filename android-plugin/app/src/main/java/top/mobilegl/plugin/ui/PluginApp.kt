@@ -2,6 +2,8 @@
 package top.mobilegl.plugin.ui
 
 import android.app.ActivityManager
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
@@ -34,6 +36,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -49,8 +52,10 @@ import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -79,6 +84,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.IntOffset
@@ -91,6 +97,8 @@ import top.mobilegl.plugin.BuildConfig
 import top.mobilegl.plugin.config.ConfigStore
 import top.mobilegl.plugin.config.PluginConfig
 import top.mobilegl.plugin.config.RuntimeConfigWriter
+import top.mobilegl.plugin.diagnostics.DiagnosticsLog
+import top.mobilegl.plugin.diagnostics.DiagnosticsSnapshot
 import top.mobilegl.plugin.driver.DriverPack
 import top.mobilegl.plugin.driver.DriverRepository
 import top.mobilegl.plugin.driver.ExternalLibrary
@@ -170,6 +178,7 @@ fun MobileGlPluginApp() {
         val selfTestRepository = remember { SelfTestRepository(context) }
         val runtimeWriter = remember { RuntimeConfigWriter(context) }
         val turnipRepository = remember { TurnipRepository(context) }
+        val diagnostics = remember { DiagnosticsLog(context) }
         val scope = rememberCoroutineScope()
 
         var config by remember { mutableStateOf(store.load()) }
@@ -190,6 +199,11 @@ fun MobileGlPluginApp() {
                 runCatching { turnipRepository.scan() }.getOrDefault(emptyList())
             }
             turnipScanning = false
+            diagnostics.record(
+                "app",
+                "启动 · 内置 Turnip 变体=" + turnipDrivers.count { it.bundled } +
+                    " · runtime.conf 共享写入=" + runtimeStatus.sharedWritten,
+            )
             if (report == null) {
                 probing = true
                 report = selfTestRepository.run(config, config.selfTestLibraryPath ?: config.activeRendererLibPath)
@@ -204,6 +218,9 @@ fun MobileGlPluginApp() {
                 val status = withContext(Dispatchers.IO) {
                     store.save(updated)
                     runtimeWriter.write(updated)
+                }
+                if (!status.sharedWritten) {
+                    diagnostics.record("runtime", "共享 runtime.conf 写入失败: " + (status.reason ?: "未知原因"))
                 }
                 runtimeStatus = status
             }
@@ -230,12 +247,14 @@ fun MobileGlPluginApp() {
                 // Disabled: path/version are cleared so the next enable re-selects the auto
                 // variant. This also migrates configs from the single-library version.
                 if (config.turnipDriverPath != null || config.turnipDriverVersion != null) {
+                    diagnostics.record("turnip", "未启用 · 清除残留驱动路径: " + config.turnipDriverPath)
                     persist(config.copy(turnipDriverPath = null, turnipDriverVersion = null))
                 }
                 return@LaunchedEffect
             }
             // A positively detected non-Adreno GPU must never keep Turnip enabled.
             if (turnipGpu.kind == TurnipGpuKind.Other) {
+                diagnostics.record("turnip", "自动关闭 · 检测到非 Adreno GPU: " + turnipGpu.label)
                 persist(config.copy(turnipEnabled = false, turnipDriverPath = null, turnipDriverVersion = null))
                 return@LaunchedEffect
             }
@@ -243,8 +262,13 @@ fun MobileGlPluginApp() {
             val auto = turnipRepository.autoBundledDriver(turnipDrivers, turnipGpu)
             val selected = turnipDrivers.firstOrNull { it.path == config.turnipDriverPath } ?: auto
             if (selected == null) {
+                diagnostics.record("turnip", "自动关闭 · 没有可用的内置/外部 Turnip 库")
                 persist(config.copy(turnipEnabled = false, turnipDriverPath = null, turnipDriverVersion = null))
             } else if (selected.path != config.turnipDriverPath || selected.version != config.turnipDriverVersion) {
+                diagnostics.record(
+                    "turnip",
+                    "路径失效或变体变更 · 自动回退: " + selected.displayName + " · " + selected.path,
+                )
                 persist(config.copy(turnipDriverPath = selected.path, turnipDriverVersion = selected.version))
             }
         }
@@ -263,6 +287,29 @@ fun MobileGlPluginApp() {
                 append(" · ").append(turnipGpu.modelLabel)
                 turnipGpu.autoVariant?.let { append(" → ").append(it.label) }
             }
+        }
+
+        // Facts embedded into the diagnostics report shared from the Info tab.
+        val diagnosticsState = remember(
+            config.backend,
+            config.sfpewEnabled,
+            config.turnipEnabled,
+            config.turnipDriverPath,
+            config.turnipDriverVersion,
+            turnipGpu,
+            runtimeStatus.sharedWritten,
+        ) {
+            DiagnosticsSnapshot(
+                backend = config.backend,
+                sfpewEnabled = config.sfpewEnabled,
+                turnipEnabled = config.turnipEnabled,
+                turnipDriverPath = config.turnipDriverPath,
+                turnipDriverVersion = config.turnipDriverVersion,
+                gpuLabel = turnipGpu.modelLabel,
+                autoVariantLabel = turnipGpu.autoVariant?.label,
+                runtimeConfigPath = runtimeStatus.sharedPath,
+                runtimeConfigSharedWritten = runtimeStatus.sharedWritten,
+            )
         }
 
         val prefs = remember { context.getSharedPreferences("mobilegl_plugin", Context.MODE_PRIVATE) }
@@ -390,6 +437,8 @@ fun MobileGlPluginApp() {
                         Dest.Info -> InfoTab(
                             config = config,
                             lastReport = report,
+                            diagnostics = diagnostics,
+                            diagnosticsState = diagnosticsState,
                             onOpenSelfTest = { lastTab = 2; dest = Dest.SelfTest },
                             onShareReport = { shareReport(context, selfTestRepository) },
                         )
@@ -397,6 +446,7 @@ fun MobileGlPluginApp() {
                             repository = driverRepository,
                             externalRepository = externalRepository,
                             turnipRepository = turnipRepository,
+                            diagnostics = diagnostics,
                             drivers = drivers,
                             externalLibraries = externalLibraries,
                             turnipDrivers = turnipDrivers,
@@ -435,6 +485,16 @@ fun MobileGlPluginApp() {
                                 }
                             },
                             onTurnipChange = { enabled, path, version ->
+                                val action = when {
+                                    enabled && !config.turnipEnabled -> "启用"
+                                    !enabled && config.turnipEnabled -> "关闭"
+                                    enabled && path != config.turnipDriverPath -> "切换变体"
+                                    else -> "更新选择"
+                                }
+                                diagnostics.record(
+                                    "turnip",
+                                    action + " · 路径=" + (path ?: "-") + " · 版本=" + (version ?: "-"),
+                                )
                                 persist(
                                     config.copy(
                                         turnipEnabled = enabled,
@@ -674,6 +734,8 @@ private fun DeviceRow(label: String, value: String) {
 private fun InfoTab(
     config: PluginConfig,
     lastReport: SelfTestResult?,
+    diagnostics: DiagnosticsLog,
+    diagnosticsState: DiagnosticsSnapshot,
     onOpenSelfTest: () -> Unit,
     onShareReport: () -> Unit,
 ) {
@@ -698,6 +760,10 @@ private fun InfoTab(
             val verdict = lastReport?.backends?.joinToString(" / ") { it.verdict }
             InfoRow("最近自检", verdict?.ifBlank { "未运行" } ?: "未运行")
         }
+        SectionLabel("诊断日志")
+        InfoCard {
+            DiagnosticsPanel(diagnostics = diagnostics, state = diagnosticsState)
+        }
         SectionLabel("关于")
         InfoCard {
             InfoRow("开发者", "MobileGL-Dev")
@@ -707,6 +773,153 @@ private fun InfoTab(
         Spacer(Modifier.height(12.dp))
         TextButton(onClick = onShareReport) { Text("分享自检报告") }
         Spacer(Modifier.height(24.dp))
+    }
+}
+
+@Composable
+private fun DiagnosticsPanel(diagnostics: DiagnosticsLog, state: DiagnosticsSnapshot) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var status by remember { mutableStateOf(diagnostics.status()) }
+    var preview by remember { mutableStateOf("") }
+    var busy by remember { mutableStateOf(false) }
+    var message by remember { mutableStateOf<String?>(null) }
+    var fullText by remember { mutableStateOf<String?>(null) }
+    var showFull by remember { mutableStateOf(false) }
+    var confirmClear by remember { mutableStateOf(false) }
+
+    fun reload() {
+        scope.launch {
+            busy = true
+            val loaded = withContext(Dispatchers.IO) { diagnostics.status() to diagnostics.lastLines(8) }
+            status = loaded.first
+            preview = loaded.second
+            busy = false
+        }
+    }
+
+    fun snapshotText(onReady: (String) -> Unit) {
+        scope.launch {
+            busy = true
+            val text = withContext(Dispatchers.IO) { diagnostics.snapshot(state) }
+            busy = false
+            onReady(text)
+        }
+    }
+
+    fun copySnapshot() {
+        snapshotText { text ->
+            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+            if (clipboard == null) {
+                message = "无法访问剪贴板"
+            } else {
+                clipboard.setPrimaryClip(ClipData.newPlainText("MobileGL 诊断日志", text))
+                message = "已复制诊断日志（" + text.length + " 字符）"
+            }
+        }
+    }
+
+    fun shareSnapshot() {
+        snapshotText { text ->
+            val intent = Intent(Intent.ACTION_SEND).apply {
+                type = "text/plain"
+                putExtra(Intent.EXTRA_SUBJECT, "MobileGL 诊断日志")
+                putExtra(Intent.EXTRA_TEXT, text)
+            }
+            context.startActivity(Intent.createChooser(intent, "分享诊断日志"))
+        }
+    }
+
+    LaunchedEffect(Unit) { reload() }
+
+    InfoRow("UI 日志", status.uiLogPath)
+    InfoRow("大小", diagnostics.formatSize(status.uiLogSizeBytes))
+    InfoRow(
+        "游戏日志",
+        if (status.gameLogReadable) "可读取 · " + status.gameLogPath else "不可读（未授权或不存在）· " + status.gameLogPath,
+    )
+    if (status.usingPrivateFallback) {
+        Text(
+            "共享路径不可用，UI 日志已回退私有路径；未授予“所有文件访问权限”时游戏日志也无法读取。",
+            style = MaterialTheme.typography.labelSmall,
+            color = verdictColor("WARN"),
+        )
+    }
+    Spacer(Modifier.height(8.dp))
+    Text("最近日志", style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold)
+    Text(
+        preview.ifBlank { if (busy) "读取中…" else "（暂无日志；启用/切换 Turnip、导入外部库或写配置失败时会记录）" },
+        style = MaterialTheme.typography.labelSmall,
+        fontFamily = FontFamily.Monospace,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+    )
+    Spacer(Modifier.height(8.dp))
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Button(enabled = !busy, onClick = { shareSnapshot() }) { Text("分享日志") }
+        OutlinedButton(enabled = !busy, onClick = { copySnapshot() }) { Text("复制") }
+    }
+    Spacer(Modifier.height(8.dp))
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        OutlinedButton(enabled = !busy, onClick = {
+            snapshotText { text ->
+                fullText = text
+                showFull = true
+            }
+        }) { Text("查看完整") }
+        OutlinedButton(enabled = !busy, onClick = { reload() }) { Text("刷新") }
+        OutlinedButton(enabled = !busy, onClick = { confirmClear = true }) { Text("清空") }
+    }
+    message?.let {
+        Spacer(Modifier.height(6.dp))
+        Text(it, style = MaterialTheme.typography.labelSmall, color = verdictColor("PASS"))
+    }
+
+    if (confirmClear) {
+        AlertDialog(
+            onDismissRequest = { confirmClear = false },
+            title = { Text("清空诊断日志") },
+            text = { Text("只清空 UI 日志（" + status.uiLogPath + "）；native 游戏日志 game.log 不受影响。") },
+            confirmButton = {
+                TextButton(onClick = {
+                    confirmClear = false
+                    scope.launch {
+                        busy = true
+                        val cleared = withContext(Dispatchers.IO) { diagnostics.clear() }
+                        busy = false
+                        reload()
+                        message = if (cleared) "已清空 UI 日志" else "没有可清空的 UI 日志"
+                    }
+                }) { Text("清空") }
+            },
+            dismissButton = { TextButton(onClick = { confirmClear = false }) { Text("取消") } },
+        )
+    }
+    if (showFull) {
+        AlertDialog(
+            onDismissRequest = { showFull = false },
+            title = { Text("诊断日志") },
+            text = {
+                Box(Modifier.heightIn(max = 420.dp).verticalScroll(rememberScrollState())) {
+                    Text(
+                        fullText.orEmpty(),
+                        style = MaterialTheme.typography.labelSmall,
+                        fontFamily = FontFamily.Monospace,
+                    )
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    val text = fullText.orEmpty()
+                    val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? ClipboardManager
+                    if (clipboard != null) {
+                        clipboard.setPrimaryClip(ClipData.newPlainText("MobileGL 诊断日志", text))
+                        message = "已复制诊断日志（" + text.length + " 字符）"
+                    }
+                }) { Text("复制") }
+            },
+            dismissButton = { TextButton(onClick = { showFull = false }) { Text("关闭") } },
+        )
     }
 }
 

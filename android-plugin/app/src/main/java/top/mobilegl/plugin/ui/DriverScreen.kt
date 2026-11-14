@@ -36,6 +36,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import top.mobilegl.plugin.config.PluginConfig
+import top.mobilegl.plugin.diagnostics.DiagnosticsLog
 import top.mobilegl.plugin.driver.DriverPack
 import top.mobilegl.plugin.driver.DriverRepository
 import top.mobilegl.plugin.driver.ExternalLibrary
@@ -51,6 +52,7 @@ fun DriverScreen(
     repository: DriverRepository,
     externalRepository: ExternalLibraryRepository,
     turnipRepository: TurnipRepository,
+    diagnostics: DiagnosticsLog,
     drivers: List<DriverPack>,
     externalLibraries: List<ExternalLibrary>,
     turnipDrivers: List<TurnipDriver>,
@@ -113,15 +115,21 @@ fun DriverScreen(
         if (uri != null) {
             scope.launch {
                 turnipImporting = true
+                diagnostics.record("import", "开始导入外部 Turnip: " + uri)
                 val outcome = turnipRepository.import(uri)
                 turnipImporting = false
                 outcome.fold(
                     onSuccess = { driver ->
                         turnipMessage = "已导入 " + driver.name + "（" + driver.versionLabel + "），已设为当前驱动"
+                        diagnostics.record("import", "导入成功: " + driver.name + " · " + driver.versionLabel + " · " + driver.path)
                         onTurnipChange(true, driver.path, driver.version)
                         onRefresh()
                     },
-                    onFailure = { turnipMessage = "导入失败：" + (it.message ?: it.toString()) },
+                    onFailure = {
+                        val reason = it.message ?: it.toString()
+                        turnipMessage = "导入失败：" + reason
+                        diagnostics.record("import", "导入失败: " + reason)
+                    },
                 )
             }
         }
@@ -288,7 +296,9 @@ fun DriverScreen(
             confirmButton = {
                 TextButton(onClick = {
                     val wasSelected = driver.path == selectedTurnip?.path
-                    turnipMessage = if (turnipRepository.delete(driver)) "已删除 " + driver.name else "删除失败"
+                    val deleted = turnipRepository.delete(driver)
+                    diagnostics.record("import", (if (deleted) "已删除外部 Turnip: " else "删除外部 Turnip 失败: ") + driver.name)
+                    turnipMessage = if (deleted) "已删除 " + driver.name else "删除失败"
                     if (wasSelected) {
                         val fallback = autoTurnip
                         if (config.turnipEnabled && fallback != null) {
