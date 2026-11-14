@@ -225,15 +225,23 @@ fun MobileGlPluginApp() {
         val turnipGpu = remember(gpuHints) { turnipRepository.detectGpu(gpuHints) }
 
         LaunchedEffect(turnipScanning, turnipDrivers, turnipGpu, config.turnipEnabled, config.turnipDriverPath, config.turnipDriverVersion) {
-            if (turnipScanning || !config.turnipEnabled) return@LaunchedEffect
-            // A positively detected non-Adreno GPU must never keep Turnip enabled.
-            if (turnipGpu.kind == TurnipGpuKind.Other) {
-                persist(config.copy(turnipEnabled = false))
+            if (turnipScanning) return@LaunchedEffect
+            if (!config.turnipEnabled) {
+                // Disabled: path/version are cleared so the next enable re-selects the auto
+                // variant. This also migrates configs from the single-library version.
+                if (config.turnipDriverPath != null || config.turnipDriverVersion != null) {
+                    persist(config.copy(turnipDriverPath = null, turnipDriverVersion = null))
+                }
                 return@LaunchedEffect
             }
-            // Repair a stale selection: fall back to the bundled driver, otherwise disable.
-            val selected = turnipDrivers.firstOrNull { it.path == config.turnipDriverPath }
-                ?: turnipDrivers.firstOrNull { it.bundled }
+            // A positively detected non-Adreno GPU must never keep Turnip enabled.
+            if (turnipGpu.kind == TurnipGpuKind.Other) {
+                persist(config.copy(turnipEnabled = false, turnipDriverPath = null, turnipDriverVersion = null))
+                return@LaunchedEffect
+            }
+            // Repair a stale selection: fall back to the auto variant, otherwise disable.
+            val auto = turnipRepository.autoBundledDriver(turnipDrivers, turnipGpu)
+            val selected = turnipDrivers.firstOrNull { it.path == config.turnipDriverPath } ?: auto
             if (selected == null) {
                 persist(config.copy(turnipEnabled = false, turnipDriverPath = null, turnipDriverVersion = null))
             } else if (selected.path != config.turnipDriverPath || selected.version != config.turnipDriverVersion) {
@@ -242,18 +250,18 @@ fun MobileGlPluginApp() {
         }
 
         val turnipSummary = remember(turnipDrivers, turnipGpu, config.turnipEnabled, config.turnipDriverPath) {
-            val selected = turnipDrivers.firstOrNull { it.path == config.turnipDriverPath }
-                ?: turnipDrivers.firstOrNull { it.bundled }
-            val gpuLabel = when (turnipGpu.kind) {
-                TurnipGpuKind.Adreno -> "Adreno"
-                TurnipGpuKind.Other -> "非 Adreno，不可用"
-                TurnipGpuKind.Unknown -> "GPU 未确认"
-            }
+            val auto = turnipRepository.autoBundledDriver(turnipDrivers, turnipGpu)
+            val selected = turnipDrivers.firstOrNull { it.path == config.turnipDriverPath } ?: auto
             buildString {
-                append(if (config.turnipEnabled) "已启用 · Turnip" else "未启用 · 系统 Vulkan")
-                if (selected?.experimental == true) append(" · 外部实验（可能回退）")
+                if (config.turnipEnabled) {
+                    append("已启用 · ").append(selected?.displayName ?: "Turnip")
+                } else {
+                    append("未启用 · 系统 Vulkan")
+                }
+                if (selected?.experimental == true) append(" · 外部实验")
                 selected?.version?.let { append(" · Mesa ").append(it) }
-                append(" · ").append(gpuLabel)
+                append(" · ").append(turnipGpu.modelLabel)
+                turnipGpu.autoVariant?.let { append(" → ").append(it.label) }
             }
         }
 

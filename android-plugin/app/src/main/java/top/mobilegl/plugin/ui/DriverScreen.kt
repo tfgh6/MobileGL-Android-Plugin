@@ -74,9 +74,11 @@ fun DriverScreen(
     var turnipMessage by remember { mutableStateOf<String?>(null) }
     var turnipImporting by remember { mutableStateOf(false) }
 
-    val selectedTurnip = remember(turnipDrivers, config.turnipDriverPath) {
-        turnipDrivers.firstOrNull { it.path == config.turnipDriverPath }
-            ?: turnipDrivers.firstOrNull { it.bundled }
+    val autoTurnip = remember(turnipDrivers, turnipGpu) {
+        turnipRepository.autoBundledDriver(turnipDrivers, turnipGpu)
+    }
+    val selectedTurnip = remember(turnipDrivers, config.turnipDriverPath, autoTurnip) {
+        turnipDrivers.firstOrNull { it.path == config.turnipDriverPath } ?: autoTurnip
     }
 
     val driverImporter = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
@@ -115,8 +117,8 @@ fun DriverScreen(
                 turnipImporting = false
                 outcome.fold(
                     onSuccess = { driver ->
-                        turnipMessage = "已导入 " + driver.name + "（" + driver.versionLabel + "）"
-                        onTurnipChange(config.turnipEnabled, driver.path, driver.version)
+                        turnipMessage = "已导入 " + driver.name + "（" + driver.versionLabel + "），已设为当前驱动"
+                        onTurnipChange(true, driver.path, driver.version)
                         onRefresh()
                     },
                     onFailure = { turnipMessage = "导入失败：" + (it.message ?: it.toString()) },
@@ -161,14 +163,19 @@ fun DriverScreen(
             loading = turnipLoading,
             configFileShared = configFileShared,
             selected = selectedTurnip,
+            autoDriver = autoTurnip,
             importing = turnipImporting,
             message = turnipMessage,
             externalDir = turnipRepository.externalDir().absolutePath,
             onToggle = { enabled ->
-                val driver = selectedTurnip
-                onTurnipChange(enabled, driver?.path, driver?.version)
+                if (enabled) {
+                    val driver = selectedTurnip ?: autoTurnip
+                    onTurnipChange(true, driver?.path, driver?.version)
+                } else {
+                    onTurnipChange(false, null, null)
+                }
             },
-            onSelect = { driver -> onTurnipChange(config.turnipEnabled, driver.path, driver.version) },
+            onSelect = { driver -> onTurnipChange(true, driver.path, driver.version) },
             onDelete = { driver -> pendingDeleteTurnip = driver },
             onImport = { turnipImporter.launch(arrayOf("application/octet-stream", "*/*")) },
             onRefresh = onRefresh,
@@ -283,8 +290,12 @@ fun DriverScreen(
                     val wasSelected = driver.path == selectedTurnip?.path
                     turnipMessage = if (turnipRepository.delete(driver)) "已删除 " + driver.name else "删除失败"
                     if (wasSelected) {
-                        val fallback = turnipDrivers.firstOrNull { it.bundled && it.path != driver.path }
-                        onTurnipChange(fallback != null && config.turnipEnabled, fallback?.path, fallback?.version)
+                        val fallback = autoTurnip
+                        if (config.turnipEnabled && fallback != null) {
+                            onTurnipChange(true, fallback.path, fallback.version)
+                        } else {
+                            onTurnipChange(false, null, null)
+                        }
                     }
                     pendingDeleteTurnip = null
                     onRefresh()
@@ -303,6 +314,7 @@ private fun TurnipCard(
     loading: Boolean,
     configFileShared: Boolean,
     selected: TurnipDriver?,
+    autoDriver: TurnipDriver?,
     importing: Boolean,
     message: String?,
     externalDir: String,
@@ -337,16 +349,24 @@ private fun TurnipCard(
             }
         }
         Spacer(Modifier.height(6.dp))
-        InfoRow("GPU", gpu.label + " · " + when (gpu.kind) {
-            TurnipGpuKind.Adreno -> "Adreno"
-            TurnipGpuKind.Other -> "非 Adreno"
-            TurnipGpuKind.Unknown -> "未确认"
-        })
-        InfoRow("驱动版本", selected?.versionLabel ?: if (loading) "扫描中…" else "未找到可用 Turnip 库")
-        InfoRow("驱动来源", selected?.let { it.sourceLabel + " · " + it.name } ?: "—")
-        InfoRow("驱动路径", selected?.path ?: "—")
-        if (!config.turnipEnabled) {
-            InfoRow("回退", "关闭时使用系统 Vulkan")
+        InfoRow(
+            "GPU 型号",
+            gpu.modelLabel + when (gpu.kind) {
+                TurnipGpuKind.Adreno -> if (gpu.model == 740 && gpu.samsung) " · OneUI/三星" else ""
+                TurnipGpuKind.Other -> " · 非 Adreno"
+                TurnipGpuKind.Unknown -> " · 未确认"
+            },
+        )
+        InfoRow("自动变体", gpu.autoVariantLabel)
+        if (config.turnipEnabled) {
+            InfoRow("当前驱动", selected?.displayName ?: if (loading) "扫描中…" else "未找到可用 Turnip 库")
+            InfoRow("驱动版本", selected?.versionLabel ?: "—")
+            InfoRow("驱动来源", selected?.let { it.sourceLabel + " · " + it.name } ?: "—")
+            InfoRow("驱动路径", selected?.path ?: "—")
+        } else {
+            InfoRow("当前驱动", "未启用 · 系统 Vulkan")
+            InfoRow("内置版本", selected?.versionLabel ?: if (loading) "扫描中…" else "未找到")
+            InfoRow("启用后", "自动选择 " + gpu.autoVariantLabel + "（可手动切换）")
         }
         if (!configFileShared) {
             Text(
@@ -372,7 +392,7 @@ private fun TurnipCard(
             Column(Modifier.weight(1f)) {
                 Text("启用骁龙 Turnip", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
                 Text(
-                    "写入 runtime.conf 的 MOBILEGL_TURNIP_ENABLED / MOBILEGL_TURNIP_PATH，重启游戏生效",
+                    "按 GPU 型号自动选择内置变体；写入 runtime.conf 的 MOBILEGL_TURNIP_ENABLED / MOBILEGL_TURNIP_PATH，重启游戏生效",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -400,7 +420,7 @@ private fun TurnipCard(
         if (!loading && drivers.isEmpty()) {
             Spacer(Modifier.height(6.dp))
             Text(
-                "APK 内缺少 libvulkan_freedreno.so，也未导入外部库；Turnip 不可用，会继续使用系统 Vulkan。",
+                "APK 内未找到内置 Turnip 变体库，也未导入外部库；Turnip 不可用，会继续使用系统 Vulkan。",
                 style = MaterialTheme.typography.labelSmall,
                 color = verdictColor("WARN"),
             )
@@ -409,8 +429,17 @@ private fun TurnipCard(
             TurnipDriverRow(
                 driver = driver,
                 selected = driver.path == selected?.path,
+                recommended = autoDriver != null && driver.path == autoDriver.path,
                 onSelect = { onSelect(driver) },
                 onDelete = { onDelete(driver) },
+            )
+        }
+        if (drivers.isNotEmpty()) {
+            Spacer(Modifier.height(6.dp))
+            Text(
+                "自动规则：Adreno 710/720/722 → A710/A720；750/8xx → A8xx；740 三星/OneUI → 8G2 OneUI；其他 Adreno → 通用。可手动切换内置变体。",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
         Spacer(Modifier.height(8.dp))
@@ -428,7 +457,8 @@ private fun TurnipCard(
         Text(
             "开关直接写入 /sdcard/MobileGL/runtime.conf，由 MobileGL 启动时读取；" +
                 "不需要在 FCL / Zalith 的版本设置里选择任何驱动，也不再依赖启动器的 driver 选项。" +
-                "内置驱动位于 APK 的 nativeLibraryDir，是可靠的加载路径。" +
+                "本 APK 内置 4 个 Turnip v27 arm64 变体（通用 / A710-A720 / A8xx / 8G2 OneUI），" +
+                "启用时写入所选变体的绝对路径（nativeLibraryDir），是可靠的加载路径。" +
                 "外部库放在 " + externalDir + "（会校验 arm64 ELF），为实验性功能：/sdcard 为 noexec 挂载，" +
                 "MobileGL 会在游戏进程内复制到应用缓存后再加载，失败时自动回退系统 Vulkan。" +
                 "检测到非 Adreno（Mali / PowerVR / Xclipse）时开关自动禁用。",
@@ -442,28 +472,42 @@ private fun TurnipCard(
 private fun TurnipDriverRow(
     driver: TurnipDriver,
     selected: Boolean,
+    recommended: Boolean,
     onSelect: () -> Unit,
     onDelete: () -> Unit,
 ) {
     Column(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text(driver.name, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
+                Text(driver.displayName, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
                 Text(
                     driver.sourceLabel + " · " + driver.versionLabel + " · " + driver.sizeMiB + " MiB",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
+                driver.variant?.models?.let { models ->
+                    Text(
+                        models,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
                 Text(
                     driver.path,
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            if (selected) {
-                StatusPill("使用中", verdictColor("PASS"))
-            } else if (driver.experimental) {
-                StatusPill("实验", verdictColor("WARN"))
+            Column(horizontalAlignment = Alignment.End) {
+                if (selected) {
+                    StatusPill("使用中", verdictColor("PASS"))
+                }
+                if (recommended) {
+                    if (selected) Spacer(Modifier.height(4.dp))
+                    StatusPill("自动", MaterialTheme.colorScheme.primary)
+                } else if (!selected && driver.experimental) {
+                    StatusPill("实验", verdictColor("WARN"))
+                }
             }
         }
         if (driver.experimental) {
