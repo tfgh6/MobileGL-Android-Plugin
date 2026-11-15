@@ -13,7 +13,9 @@ def mobileGlUseSfpew = (findProperty('mobilegl.sfpew') ?: (mobileGlPrebuiltLibsD
 def mobileGlEnvString = { backendType ->
     def env = [
             LIBGL_ES             : '3',
-            POJAV_RENDERER       : 'opengles3',
+            // Clean-room experiment: ZL2/FCL keep the GL/EGL bridge for this id and
+            // additionally prepare their Vulkan loader, which MobileGL inherits via VULKAN_PTR.
+            POJAV_RENDERER       : 'opengles3_desktopgl_zink_kopper',
             MOBILEGL_BACKEND_TYPE: backendType,
     ]
     if (mobileGlUseSfpew) {
@@ -56,7 +58,7 @@ def mobileGlRendererConfig = { String backendType ->
     def values = ['DirectGLES', 'DirectVulkan']
     def env = [
             [type: 'NormalEnv', key: 'LIBGL_ES', value: '3'],
-            [type: 'NormalEnv', key: 'POJAV_RENDERER', value: 'opengles3'],
+            [type: 'NormalEnv', key: 'POJAV_RENDERER', value: 'opengles3_desktopgl_zink_kopper'],
             [type: 'SelectableEnv', key: 'MOBILEGL_BACKEND_TYPE',
              title: [key: 'mobilegl_backend_type_title'], check: true,
              items: [defaultValue: backendType, values: values]],
@@ -77,7 +79,7 @@ def mobileGlRendererConfig = { String backendType ->
             : (mobileGlUseSfpew ? '**|libSimpleFPEWrapper.so' : '**|libMobileGL.so')
     def config = [
             displayName    : mobileGlRendererDisplayName(backendType),
-            rendererId     : 'opengles3',
+            rendererId     : 'opengles3_desktopgl_zink_kopper',
             rendererGLPath : glLib,
             rendererEGLPath: glLib,
             dlopenLibPaths : [],
@@ -235,6 +237,11 @@ android {
 
     buildTypes {
         debug {
+            // Clean-room experiment build: installs beside the release app with its
+            // own data dir, so a stale external-core choice / version snapshot from an
+            // earlier install cannot leak into this build.
+            applicationIdSuffix '.kopper'
+            versionNameSuffix '-kopper'
             if (fixedDebugKeystore.exists()) {
                 signingConfig signingConfigs.debug
             }

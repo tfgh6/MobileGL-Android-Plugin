@@ -18,6 +18,7 @@
 #include <unistd.h>
 
 #include "proxy_symbols.h"
+#include "vulkan_got_patch.h"
 
 #define TAG "RendererProxy"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, TAG, __VA_ARGS__)
@@ -80,53 +81,16 @@ static int truthy(const char *value) {
     return strcmp(value, "0") != 0 && strcasecmp(value, "false") != 0;
 }
 
+// Clean-room experiment build: an earlier install may have left
+// /sdcard/MobileGL/runtime.conf pointing at an older external core (RENDERER_SO)
+// plus a stale version snapshot. Ignore that file completely and always load the
+// libMobileGL.so bundled in this APK, so the running renderer matches the package.
 static int read_config(char *mode, size_t mode_len, char *so, size_t so_len) {
     mode[0] = 0;
     so[0] = 0;
-    // Environment is the fallback used when the plugin-managed file is not
-    // readable from the game process (launcher without storage permission).
-    const char *env_mode = getenv("RENDERER_MODE");
-    if (env_mode && env_mode[0]) snprintf(mode, mode_len, "%s", env_mode);
-    const char *env_enabled = getenv("SFPEW_ENABLED");
-    if (env_enabled && env_enabled[0]) snprintf(mode, mode_len, "%s", truthy(env_enabled) ? "sfpew" : "direct");
-    const char *env_so = getenv("RENDERER_SO");
-    if (env_so && env_so[0]) snprintf(so, so_len, "%s", env_so);
-    const char *env = getenv("MOBILEGL_CONFIG_FILE");
-    const char *path = (env && env[0]) ? env : "/sdcard/MobileGL/runtime.conf";
-    FILE *file = fopen(path, "r");
-    if (!file) {
-        LOGE("cannot read %s, using env/defaults", path);
-        if (!mode[0]) snprintf(mode, mode_len, "direct");
-        return 0;
-    }
-    char line[1024];
-    while (fgets(line, sizeof(line), file)) {
-        trim(line);
-        if (!line[0] || line[0] == '#') continue;
-        char *eq = strchr(line, '=');
-        if (!eq) continue;
-        *eq = 0;
-        trim(line);
-        char *value = eq + 1;
-        trim(value);
-        if (strcmp(line, "RENDERER_MODE") == 0) {
-            snprintf(mode, mode_len, "%s", value);
-        } else if (strcmp(line, "RENDERER_SO") == 0) {
-            snprintf(so, so_len, "%s", value);
-        } else if (strcmp(line, "SFPEW_ENABLED") == 0) {
-            snprintf(mode, mode_len, "%s", truthy(value) ? "sfpew" : "direct");
-        } else if (strncmp(line, "RENDERER_", 9) != 0) {
-            // Propagate the plugin-managed file into the process env so both
-            // SFPEW and MobileGL read the exact same configuration.
-            setenv(line, value, 1);
-        }
-    }
-    fclose(file);
-    // A present config file must opt in explicitly. A missing file keeps the
-    // historical default (load SFPEW), which is what shipped builds relied on.
-    if (!mode[0]) snprintf(mode, mode_len, "direct");
-    LOGI("config %s: RENDERER_MODE=%s RENDERER_SO=%s", path, mode, so[0] ? so : "(bundled)");
-    return 1;
+    snprintf(mode, mode_len, "direct");
+    LOGI("clean-room proxy: ignoring runtime.conf; loading the bundled libMobileGL.so");
+    return 0;
 }
 
 // Load a .so that lives outside the app's native library directory: copy it into
@@ -177,14 +141,28 @@ __attribute__((constructor)) static void init_renderer_proxy(void) {
     }
     if (!g_lib_dir[0]) snprintf(g_lib_dir, sizeof(g_lib_dir), "/data/app");
     LOGI("proxy library dir: %s", g_lib_dir);
+    const char *launcher_renderer = getenv("POJAV_RENDERER");
+    const char *vulkan_ptr = getenv("VULKAN_PTR");
+    const char *driver_path = getenv("DRIVER_PATH");
+    const char *backend_type = getenv("MOBILEGL_BACKEND_TYPE");
+    LOGI("launcher env: POJAV_RENDERER=%s VULKAN_PTR=%s DRIVER_PATH=%s MOBILEGL_BACKEND_TYPE=%s",
+         launcher_renderer ? launcher_renderer : "(unset)",
+         vulkan_ptr ? vulkan_ptr : "(unset)",
+         driver_path ? driver_path : "(unset)",
+         backend_type ? backend_type : "(unset)");
     char mode[16];
     char so[512];
     int file_ok = read_config(mode, sizeof(mode), so, sizeof(so));
+    // Drop stale routing variables from earlier builds; launcher-provided env stays.
+    unsetenv("RENDERER_SO");
+    unsetenv("RENDERER_MODE");
+    unsetenv("SFPEW_ENABLED");
 
     void *target = NULL;
     void *direct = NULL;
-    // New MobileGL builds read KEY=value files natively through this variable.
-    if (!getenv("MOBILEGL_CONFIG_FILE")) setenv("MOBILEGL_CONFIG_FILE", "/sdcard/MobileGL/runtime.conf", 0);
+    // A stale /sdcard/MobileGL/runtime.conf must not influence ConfigLoader either:
+    // point it at a path that does not exist so only the launcher environment applies.
+    setenv("MOBILEGL_CONFIG_FILE", "/data/local/tmp/mobilegl-kopper-no-config.conf", 1);
     if (strcmp(mode, "sfpew") == 0) {
         // SFPEW branch: load the wrapper by an absolute sibling path. The game
         // process does not put the plugin APK's lib dir on the default linker
@@ -226,6 +204,25 @@ __attribute__((constructor)) static void init_renderer_proxy(void) {
             else LOGE("libMobileGL.so not loadable: %s", dlerror());
         }
         direct = target;
+    }
+
+    // External Vulkan loader bridge: libMobileGL.so is used exactly as shipped (its
+    // DT_NEEDED libvulkan.so and direct vk* imports are untouched). libvulkanshim.so
+    // forwards every Vulkan entry point to the loader the host launcher prepared
+    // (VULKAN_PTR, e.g. Turnip through FCL/ZL2's Vulkan/Zink path), and we rebind the
+    // core's GOT slots to that shim here. This also works when the system libvulkan.so
+    // was already loaded by the launcher's capability probes.
+    {
+        void *vulkanShim = dlopen_sibling("libvulkanshim.so");
+        if (vulkanShim != NULL) {
+            void (*reinit)(void) = (void (*)(void))dlsym(vulkanShim, "MGVkShimReinit");
+            if (reinit != NULL) reinit();
+            void *coreForPatch = (direct != NULL) ? direct : target;
+            const int patched = MGPatchVulkanImports(coreForPatch, vulkanShim);
+            LOGI("Vulkan shim loaded: %p, patched GOT slots=%d", vulkanShim, patched);
+        } else {
+            LOGE("libvulkanshim.so not loadable: %s", dlerror());
+        }
     }
 
     unsigned missing = 0;
