@@ -4,6 +4,8 @@ package top.mobilegl.plugin.diagnostics
 import android.content.Context
 import android.os.Build
 import android.os.Environment
+import android.system.Os
+import android.system.OsConstants
 import top.mobilegl.plugin.BuildConfig
 import java.io.File
 import java.io.FileOutputStream
@@ -25,8 +27,10 @@ data class DiagnosticsSnapshot(
     val runtimeConfigPath: String,
     val runtimeConfigSharedWritten: Boolean,
     // Null means the bundled libMobileGL.so is active. A non-null path is the imported
-    // external core, which does not contain the built-in Turnip loader.
+    // external core.
     val activeRendererLibPath: String? = null,
+    // Whether the active core was built with the built-in Turnip loader (official cores are not).
+    val coreSupportsTurnip: Boolean = true,
     // Rendered lines of the last Driver POST (renderer/verdict/loader row), or null if none.
     val selfTestLines: String? = null,
 )
@@ -237,17 +241,27 @@ class DiagnosticsLog(context: Context) {
             appendLine("生成时间: " + timestampFull())
             appendLine("应用: " + appContext.packageName + " " + appVersion())
             appendLine("设备: " + Build.MANUFACTURER + " " + Build.MODEL + " · Android " + Build.VERSION.RELEASE + " (API " + Build.VERSION.SDK_INT + ")")
+            runCatching { Os.sysconf(OsConstants._SC_PAGE_SIZE) }.getOrNull()?.let { pageSize ->
+                appendLine("系统页大小: " + (pageSize / 1024) + " KiB")
+            }
             appendLine("后端: " + state.backend + " · SFPEW=" + if (state.sfpewEnabled) "开" else "关")
             appendLine("GPU: " + state.gpuLabel + " · 自动变体=" + (state.autoVariantLabel ?: "无（非 Adreno）"))
             appendLine(
                 "渲染核心: " + if (state.activeRendererLibPath == null) {
-                    "内置 libMobileGL.so（含 Turnip/诊断补丁）"
+                    "内置 libMobileGL.so（官方 26.11，系统 Vulkan）"
                 } else {
-                    "外部库 " + state.activeRendererLibPath + "（官方核心，不含内置 Turnip 加载器）"
+                    "外部库 " + state.activeRendererLibPath
                 }
             )
-            if (state.turnipEnabled && state.activeRendererLibPath != null) {
-                appendLine("警告: 已启用 Turnip，但当前渲染核心是外部库；外部核心没有内置 Turnip 加载器，Turnip 不会生效。")
+            appendLine(
+                "Turnip 支持: " + if (state.coreSupportsTurnip) {
+                    "是（当前核心含内置 Turnip 加载器）"
+                } else {
+                    "否（当前核心不含加载器；需导入本项目增强核心 libMobileGL-turnip-*.so）"
+                }
+            )
+            if (state.turnipEnabled && !state.coreSupportsTurnip) {
+                appendLine("警告: Turnip 开关已开启，但当前核心不支持 Turnip，实际不会生效。")
             }
             appendLine(
                 "Turnip: " + if (state.turnipEnabled) {

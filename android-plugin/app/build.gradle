@@ -69,6 +69,8 @@ def mobileGlRendererConfig = { String backendType ->
              title: [key: 'mobilegl_r11g11b10f_fallback_title'], toggle: false],
             [type: 'CustomizableEnv', key: 'MOBILEGL_FRAMES_IN_FLIGHT', defaultValue: '3'],
             [type: 'ToggleableEnv', key: 'MOBILEGL_ESPRYT_USE_ANGLE', value: '1', toggle: false],
+            [type: 'ToggleableEnv', key: 'MOBILEGL_ESPRYT_AVOID_SAMPLER_MIPMAP_MIN_FILTER', value: '1',
+             title: [key: 'mobilegl_avoid_sampler_mipmap_min_filter_title'], toggle: false],
             [type: 'ToggleableEnv', key: 'MOBILEGL_COHERENT_AS_FLUSH', value: '1', toggle: false],
             [type: 'ToggleableEnv', key: 'MOBILEGL_RELAXED_SEMANTICS', value: '1', toggle: false],
     ]

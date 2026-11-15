@@ -66,6 +66,7 @@ fun DriverScreen(
     onActivateLibrary: (ExternalLibrary?) -> Unit,
     onTurnipChange: (Boolean, String?, String?) -> Unit,
     externalCoreActive: Boolean,
+    coreSupportsTurnip: Boolean,
     onUseBundledCore: () -> Unit,
 ) {
     val context = LocalContext.current
@@ -190,6 +191,7 @@ fun DriverScreen(
             onImport = { turnipImporter.launch(arrayOf("application/octet-stream", "*/*")) },
             onRefresh = onRefresh,
             externalCoreActive = externalCoreActive,
+            coreSupportsTurnip = coreSupportsTurnip,
             onUseBundledCore = onUseBundledCore,
         )
 
@@ -197,7 +199,7 @@ fun DriverScreen(
             Text(
                 "可导入官方 Action 构建的 libMobileGL.so，或 libSimpleFPEWrapper.so。会校验 arm64 ELF。" +
                     "启用后：启动游戏时由 libRendererProxy.so 读取所选库；驱动自检也用它。" +
-                    "注意：外部核心不含本项目的 Turnip 加载器，启用后内置 Turnip 不会生效。",
+                    "注意：官方核心不含本项目的 Turnip 加载器；只有本项目增强核心（libMobileGL-turnip-*.so）才能启用 Turnip。",
                 style = MaterialTheme.typography.bodySmall,
             )
             Spacer(Modifier.height(8.dp))
@@ -339,6 +341,7 @@ private fun TurnipCard(
     onImport: () -> Unit,
     onRefresh: () -> Unit,
     externalCoreActive: Boolean,
+    coreSupportsTurnip: Boolean,
     onUseBundledCore: () -> Unit,
 ) {
     SectionCard("骁龙 Turnip（Adreno · 内置驱动）") {
@@ -393,15 +396,22 @@ private fun TurnipCard(
                 color = verdictColor("FAIL"),
             )
         }
-        if (externalCoreActive) {
+        if (!coreSupportsTurnip) {
             Text(
-                "注意：当前渲染核心是“外部 .so”（官方核心），它不包含本项目的 Turnip 加载器，" +
-                    "所以 Turnip 开关不会生效。要测试内置 Turnip，请先切回内置核心。",
+                "注意：当前渲染核心是官方 26.11（内置或外部），不含本项目的 Turnip 加载器，Turnip 开关不会生效。" +
+                    "要测试 Turnip：先导入本项目的增强核心 libMobileGL-turnip-*.so，" +
+                    "在下方“外部 .so”里选中它，再回到本页启用 Turnip。",
                 style = MaterialTheme.typography.labelSmall,
                 color = verdictColor("FAIL"),
             )
+        } else if (externalCoreActive) {
+            Text(
+                "当前使用外部增强核心（含 Turnip 加载器），Turnip 开关可以生效。",
+                style = MaterialTheme.typography.labelSmall,
+                color = verdictColor("PASS"),
+            )
             Spacer(Modifier.height(4.dp))
-            OutlinedButton(onClick = onUseBundledCore) { Text("切回内置核心") }
+            OutlinedButton(onClick = onUseBundledCore) { Text("切回内置核心（官方 26.11）") }
         }
         if (selected?.experimental == true) {
             Text(
@@ -426,7 +436,7 @@ private fun TurnipCard(
             }
             Switch(
                 checked = config.turnipEnabled,
-                enabled = !loading && drivers.isNotEmpty() && (gpu.canEnable || config.turnipEnabled),
+                enabled = !loading && drivers.isNotEmpty() && (gpu.canEnable || config.turnipEnabled) && coreSupportsTurnip,
                 onCheckedChange = onToggle,
             )
         }

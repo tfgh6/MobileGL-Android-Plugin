@@ -234,6 +234,23 @@ fun MobileGlPluginApp() {
         }
 
         // --- Turnip (Mesa Freedreno) -------------------------------------------------
+        // The bundled core is now the official 26.11 build (system libvulkan), which has no
+        // Turnip loader. Only a core built from this project - bundled previously or imported
+        // as an external .so - honors MOBILEGL_TURNIP_*. Keep the switch honest about that.
+        val activeCorePath = config.activeRendererLibPath
+        val coreSupportsTurnip = remember(activeCorePath) {
+            runCatching { turnipRepository.coreSupportsTurnip(activeCorePath) }.getOrDefault(false)
+        }
+        LaunchedEffect(coreSupportsTurnip, config.turnipEnabled) {
+            if (!coreSupportsTurnip && config.turnipEnabled) {
+                diagnostics.record(
+                    "turnip",
+                    "自动关闭 · 当前核心不含 Turnip 加载器（" +
+                        (config.activeRendererLibPath ?: "内置官方核心") + "）",
+                )
+                persist(config.copy(turnipEnabled = false))
+            }
+        }
         // Renderer strings the plugin already collects (EGL/GLES probe + Driver POST).
         // Turnip may only be enabled on Adreno, with a Qualcomm platform fallback when the
         // GPU name could not be read.
@@ -305,6 +322,7 @@ fun MobileGlPluginApp() {
             config.turnipDriverPath,
             config.turnipDriverVersion,
             config.activeRendererLibPath,
+            coreSupportsTurnip,
             turnipGpu,
             runtimeStatus.sharedWritten,
             report,
@@ -321,6 +339,7 @@ fun MobileGlPluginApp() {
                 runtimeConfigPath = runtimeStatus.sharedPath,
                 runtimeConfigSharedWritten = runtimeStatus.sharedWritten,
                 activeRendererLibPath = config.activeRendererLibPath,
+                coreSupportsTurnip = coreSupportsTurnip,
                 selfTestLines = selfTestSummaryLines(report),
             )
         }
@@ -527,6 +546,7 @@ fun MobileGlPluginApp() {
                                 )
                             },
                             externalCoreActive = config.activeRendererLibPath != null,
+                            coreSupportsTurnip = coreSupportsTurnip,
                             onUseBundledCore = {
                                 val updated = config.copy(
                                     activeRendererLibPath = null,

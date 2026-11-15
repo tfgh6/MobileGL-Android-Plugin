@@ -345,6 +345,61 @@ class TurnipRepository(private val context: Context) {
         )
     }
 
+    private val coreCapabilityCache = HashMap<String, Pair<Long, Boolean>>()
+
+    /**
+     * True when the active libMobileGL.so was built with the built-in Turnip loader.
+     *
+     * Official MobileGL cores link the system libvulkan loader and do not contain the
+     * MOBILEGL_TURNIP_* handling, so enabling Turnip with one is a silent no-op. The marker
+     * is a stable string from TurnipLoader.cpp; scanning 11-16 MiB once per core file is
+     * cheap compared to the confusion it prevents. [corePath] null means the bundled core.
+     */
+    fun coreSupportsTurnip(corePath: String?): Boolean {
+        val file = if (corePath.isNullOrBlank()) {
+            File(context.applicationInfo.nativeLibraryDir, "libMobileGL.so")
+        } else {
+            File(corePath)
+        }
+        if (!file.isFile) return false
+        val stamp = file.length() xor file.lastModified()
+        synchronized(coreCapabilityCache) {
+            coreCapabilityCache[file.absolutePath]?.takeIf { it.first == stamp }?.let { return it.second }
+        }
+        val supported = runCatching { containsMarker(file, "MOBILEGL_TURNIP_ENABLED") }.getOrDefault(false)
+        synchronized(coreCapabilityCache) { coreCapabilityCache[file.absolutePath] = stamp to supported }
+        return supported
+    }
+
+    private fun containsMarker(file: File, marker: String): Boolean {
+        val needle = marker.toByteArray(Charsets.US_ASCII)
+        if (needle.isEmpty()) return true
+        val buffer = ByteArray(1024 * 1024 + needle.size)
+        file.inputStream().use { input ->
+            var carry = 0
+            while (true) {
+                val read = input.read(buffer, carry, buffer.size - carry)
+                if (read <= 0) break
+                val length = carry + read
+                if (indexOfBytes(buffer, length, needle) >= 0) return true
+                carry = minOf(needle.size - 1, length)
+                System.arraycopy(buffer, length - carry, buffer, 0, carry)
+            }
+        }
+        return false
+    }
+
+    private fun indexOfBytes(haystack: ByteArray, length: Int, needle: ByteArray): Int {
+        if (needle.size > length) return -1
+        outer@ for (i in 0..length - needle.size) {
+            for (j in needle.indices) {
+                if (haystack[i + j] != needle[j]) continue@outer
+            }
+            return i
+        }
+        return -1
+    }
+
     private fun isZipArchive(file: File): Boolean {
         val head = ByteArray(4)
         val read = runCatching { file.inputStream().use { it.read(head) } }.getOrDefault(-1)

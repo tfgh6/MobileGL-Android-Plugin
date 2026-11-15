@@ -1,8 +1,16 @@
-# 骁龙 Turnip 驱动（内置，实验）
+# 骁龙 Turnip 驱动（外部增强核心，实验）
 
-## 内置版本
+## 重要变更：内置核心改为官方 26.11
 
-APK 内置 **Banners-Turnip v27.0.0-20261114-r2** 的 4 个 Android arm64-v8a 变体：
+- APK 内置的 `libMobileGL.so` 现在是**官方 26.11 构建**（GIT@8db74d6，系统 `libvulkan.so`）。
+  它性能/兼容性与上游一致，但**不包含本项目的 Turnip 加载器**，因此内置核心下 Turnip 不可用。
+- 要测试 Turnip，请把本项目增强核心 `libMobileGL-turnip-core7a84a69.so` 导入到
+  “驱动管理 → 外部 .so”，选中它之后再启用 Turnip。切换回内置核心后 Turnip 会自动关闭。
+- UI 与诊断日志会检测当前核心是否含 `MOBILEGL_TURNIP_ENABLED` 加载器；不含时开关禁用并提示。
+
+## 内置变体
+
+APK 仍内置 **Banners-Turnip v27.0.0-20261114-r2** 的 4 个 Android arm64-v8a 变体（仅当使用增强核心时生效）：
 
 | 变体 | 库文件 | 适用 GPU |
 |---|---|---|
@@ -26,8 +34,9 @@ UI 可手动切换内置变体；外部导入仍标实验。
 
 ## 设计
 
-- MobileGL 不再链接系统 `libvulkan.so`：Android 构建使用 volk 运行时加载；
+- 增强核心不再链接系统 `libvulkan.so`：Android 构建使用 volk 运行时加载；
 - 启用 Turnip 时通过静态链接的 libadrenotools 打开选中变体，再 `volkInitializeCustom()`；
+- 内置官方核心直接链接系统 `libvulkan.so`，没有 Turnip 路径，也不会读取 `MOBILEGL_TURNIP_*`；
 - libadrenotools 的 4 个 hook 库（`libhook_impl` / `libmain_hook` / `libfile_redirect_hook` / `libgsl_alloc_hook`）随 APK 打包，且全部按 16KB page 对齐；
 - 未启用、非 Adreno、API < 28 或加载失败时回退系统 Vulkan，不崩溃；
 - 入口在 MobileGL UI：设置 → 驱动管理 → 骁龙 Turnip；不依赖 FCL/ZL2 的驱动下拉框。
@@ -43,10 +52,11 @@ UI 可手动切换内置变体；外部导入仍标实验。
 
 ## 测试步骤
 
-1. 打开 MobileGL UI → 设置 → 驱动管理 → 骁龙 Turnip。
-2. 确认 GPU 型号与自动变体；需要时可手动切换变体。
-3. 打开“启用 Turnip”。
-4. FCL/ZL2 中**不需要**选择 Turnip 驱动，直接启动 MobileGL（Vulkan）。
+1. 驱动管理 → 外部 .so → 导入 `libMobileGL-turnip-*.so` 并选中（Turnip 页面会显示“外部增强核心”）。
+2. 打开 MobileGL UI → 设置 → 驱动管理 → 骁龙 Turnip。
+3. 确认 GPU 型号与自动变体；需要时可手动切换变体。
+4. 打开“启用 Turnip”。
+5. FCL/ZL2 中**不需要**选择 Turnip 驱动，直接启动 MobileGL（Vulkan）。
 5. 抓日志：
    ```
    adb logcat -c

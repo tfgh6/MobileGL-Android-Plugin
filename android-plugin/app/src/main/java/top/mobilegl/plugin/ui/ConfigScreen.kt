@@ -113,20 +113,35 @@ fun ConfigScreen(
             )
             Spacer(Modifier.height(8.dp))
             OptionToggle("禁用 GPU 计时器查询", "MOBILEGL_DISABLE_TIMERQUERY", text) { text = setKey(text, "MOBILEGL_DISABLE_TIMERQUERY", onOff(it)) }
-            OptionToggle("禁用 Vulkan subgroup", "MOBILEGL_DISABLE_SUBGROUP", text) { text = setKey(text, "MOBILEGL_DISABLE_SUBGROUP", onOff(it)) }
+            OptionSelect(
+                label = "Vulkan subgroup 模拟",
+                options = listOf("Auto", "ForceOn", "ForceOff"),
+                value = readKey(text, "MOBILEGL_SUBGROUP_EMULATION", "Auto"),
+                onSelect = { text = setKey(text, "MOBILEGL_SUBGROUP_EMULATION", it) },
+            )
             OptionToggle("Coherent AS flush", "MOBILEGL_COHERENT_AS_FLUSH", text) { text = setKey(text, "MOBILEGL_COHERENT_AS_FLUSH", onOff(it)) }
             OptionToggle("宽松语义", "MOBILEGL_RELAXED_SEMANTICS", text) { text = setKey(text, "MOBILEGL_RELAXED_SEMANTICS", onOff(it)) }
-            OptionToggle("禁用 texture view", "MOBILEGL_DISABLE_TEXTURE_VIEW", text) { text = setKey(text, "MOBILEGL_DISABLE_TEXTURE_VIEW", onOff(it)) }
             OptionToggle("禁用大缓冲复用", "MOBILEGL_DISABLE_LARGE_BUFFER_ADOPTION", text) { text = setKey(text, "MOBILEGL_DISABLE_LARGE_BUFFER_ADOPTION", onOff(it)) }
+            OptionToggle("禁用着色器预热", "MOBILEGL_DISABLE_SHADER_PREWARM", text) { text = setKey(text, "MOBILEGL_DISABLE_SHADER_PREWARM", onOff(it)) }
             OptionToggle("异步着色器编译", "MOBILEGL_ASYNC_SHADER_COMPILE", text) { text = setKey(text, "MOBILEGL_ASYNC_SHADER_COMPILE", onOff(it)) }
             OptionText("异步编译线程数", "MOBILEGL_ASYNC_SHADER_COMPILE_THREADS", text) { text = setKey(text, "MOBILEGL_ASYNC_SHADER_COMPILE_THREADS", it) }
             OptionText("帧在途数", "MOBILEGL_FRAMES_IN_FLIGHT", text) { text = setKey(text, "MOBILEGL_FRAMES_IN_FLIGHT", it) }
             OptionText("GPU 挂起预算 (ms)", "MOBILEGL_GPU_HANG_BUDGET_MS", text) { text = setKey(text, "MOBILEGL_GPU_HANG_BUDGET_MS", it) }
             OptionToggle("Shader cache", "MOBILEGL_SHADER_CACHE", text) { text = setKey(text, "MOBILEGL_SHADER_CACHE", onOff(it)) }
             OptionToggle("SPIR-V 校验", "MOBILEGL_ENABLE_SPIRV_VALIDATION", text) { text = setKey(text, "MOBILEGL_ENABLE_SPIRV_VALIDATION", onOff(it)) }
+            OptionToggle("广告 GL_ARB_gpu_shader_fp64", "MOBILEGL_ADVERTISE_FP64", text) { text = setKey(text, "MOBILEGL_ADVERTISE_FP64", onOff(it)) }
+            OptionToggle("ES 上下文身份（GLES 3.2）", "MOBILEGL_ES_CONTEXT_IDENTITY", text) { text = setKey(text, "MOBILEGL_ES_CONTEXT_IDENTITY", onOff(it)) }
+            OptionSelect(
+                label = "iterationRP 修复",
+                options = listOf("Auto", "ForceOn", "ForceOff"),
+                value = readKey(text, "MOBILEGL_ITRP_FIX", "Auto"),
+                onSelect = { text = setKey(text, "MOBILEGL_ITRP_FIX", it) },
+            )
+            OptionText("Vulkan ICD（VK_ICD_FILENAMES）", "VK_ICD_FILENAMES", text) { text = setKey(text, "VK_ICD_FILENAMES", it) }
             Spacer(Modifier.height(6.dp))
             Text("诊断", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
             OptionToggle("管道统计", "MOBILEGL_PIPE_STATS", text) { text = setKey(text, "MOBILEGL_PIPE_STATS", onOff(it)) }
+            OptionText("统计数据文件", "MOBILEGL_PIPE_STATS_FILE", text) { text = setKey(text, "MOBILEGL_PIPE_STATS_FILE", it) }
             OptionToggle("FPS 日志", "MOBILEGL_FPS_LOG", text) { text = setKey(text, "MOBILEGL_FPS_LOG", onOff(it)) }
             OptionText("统计周期 (帧)", "MOBILEGL_PIPE_STATS_PERIOD", text) { text = setKey(text, "MOBILEGL_PIPE_STATS_PERIOD", it) }
         }
@@ -147,7 +162,14 @@ fun ConfigScreen(
             OptionToggle("Pass 缓存", "MOBILEGL_MAGMA_PASS_CACHE", text) { text = setKey(text, "MOBILEGL_MAGMA_PASS_CACHE", onOff(it)) }
             OptionToggle("丢弃后重发状态", "MOBILEGL_MAGMA_REEMIT_STATE_AFTER_DISCARD", text) { text = setKey(text, "MOBILEGL_MAGMA_REEMIT_STATE_AFTER_DISCARD", onOff(it)) }
             OptionToggle("禁用混合深度写入", "MOBILEGL_MAGMA_DISABLE_BLENDED_DEPTH_WRITE", text) { text = setKey(text, "MOBILEGL_MAGMA_DISABLE_BLENDED_DEPTH_WRITE", onOff(it)) }
-            OptionText("Magma 帧在途数", "MOBILEGL_MAGMA_FRAMESINFLIGHT", text) { text = setKey(text, "MOBILEGL_MAGMA_FRAMESINFLIGHT", it) }
+            OptionText("单帧最大绘制数", "MOBILEGL_MAGMA_MAX_DRAWS_PER_COMMAND_BUFFER", text) { text = setKey(text, "MOBILEGL_MAGMA_MAX_DRAWS_PER_COMMAND_BUFFER", it) }
+            OptionText("描述符池回收帧数", "MOBILEGL_MAGMA_DESCRIPTOR_TRIM_FRAMES", text) { text = setKey(text, "MOBILEGL_MAGMA_DESCRIPTOR_TRIM_FRAMES", it) }
+            OptionToggle("禁用 robust buffer access", "MOBILEGL_MAGMA_DISABLE_ROBUST_BUFFER_ACCESS", text) { text = setKey(text, "MOBILEGL_MAGMA_DISABLE_ROBUST_BUFFER_ACCESS", onOff(it)) }
+            OptionToggle("In-pass clear", "MOBILEGL_MAGMA_INPASS_CLEAR", text) { text = setKey(text, "MOBILEGL_MAGMA_INPASS_CLEAR", onOff(it)) }
+            OptionToggle("primgen query 重路由", "MOBILEGL_MAGMA_PRIMGEN_QUERY_REROUTE", text) { text = setKey(text, "MOBILEGL_MAGMA_PRIMGEN_QUERY_REROUTE", onOff(it)) }
+            OptionToggle("顶点转换缓存", "MOBILEGL_MAGMA_VERTEX_CONVERSION_CACHE", text) { text = setKey(text, "MOBILEGL_MAGMA_VERTEX_CONVERSION_CACHE", onOff(it)) }
+            OptionToggle("写入重命名", "MOBILEGL_MAGMA_WRITE_RENAME", text) { text = setKey(text, "MOBILEGL_MAGMA_WRITE_RENAME", onOff(it)) }
+            OptionToggle("允许非法 SPIR-V", "MOBILEGL_MAGMA_ALLOW_INVALID_SPIRV", text) { text = setKey(text, "MOBILEGL_MAGMA_ALLOW_INVALID_SPIRV", onOff(it)) }
             OptionToggle("E5 raw reads", "MOBILEGL_MAGMA_E5_RAW_READS", text) { text = setKey(text, "MOBILEGL_MAGMA_E5_RAW_READS", onOff(it)) }
             Spacer(Modifier.height(6.dp))
             Text("DirectGLES / Espryt", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
@@ -157,6 +179,17 @@ fun ConfigScreen(
             OptionToggle("避免 sampler mipmap min filter", "MOBILEGL_ESPRYT_AVOID_SAMPLER_MIPMAP_MIN_FILTER", text) { text = setKey(text, "MOBILEGL_ESPRYT_AVOID_SAMPLER_MIPMAP_MIN_FILTER", onOff(it)) }
             OptionToggle("VAO shadow", "MOBILEGL_ESPRYT_VAO_SHADOW", text) { text = setKey(text, "MOBILEGL_ESPRYT_VAO_SHADOW", onOff(it)) }
             OptionToggle("延迟 geometry emits", "MOBILEGL_ESPRYT_DEFER_GEOMETRY_EMITS", text) { text = setKey(text, "MOBILEGL_ESPRYT_DEFER_GEOMETRY_EMITS", onOff(it)) }
+            OptionToggle("强制 depth/stencil 回读模拟", "MOBILEGL_ESPRYT_FORCE_DS_READBACK_EMULATION", text) { text = setKey(text, "MOBILEGL_ESPRYT_FORCE_DS_READBACK_EMULATION", onOff(it)) }
+            OptionToggle("禁用 invalidate flush", "MOBILEGL_ESPRYT_DISABLE_INVALIDATE_FLUSH", text) { text = setKey(text, "MOBILEGL_ESPRYT_DISABLE_INVALIDATE_FLUSH", onOff(it)) }
+            OptionToggle("禁用 UBO ring", "MOBILEGL_ESPRYT_DISABLE_UBO_RING", text) { text = setKey(text, "MOBILEGL_ESPRYT_DISABLE_UBO_RING", onOff(it)) }
+            OptionToggle("禁用 unpack ring", "MOBILEGL_ESPRYT_DISABLE_UNPACK_RING", text) { text = setKey(text, "MOBILEGL_ESPRYT_DISABLE_UNPACK_RING", onOff(it)) }
+            OptionToggle("Atomic subgroup scratch", "MOBILEGL_ESPRYT_ATOMIC_SUBGROUP_SCRATCH", text) { text = setKey(text, "MOBILEGL_ESPRYT_ATOMIC_SUBGROUP_SCRATCH", onOff(it)) }
+            OptionToggle("避免显式 LOD bias", "MOBILEGL_ESPRYT_AVOID_EXPLICIT_LOD_BIAS", text) { text = setKey(text, "MOBILEGL_ESPRYT_AVOID_EXPLICIT_LOD_BIAS", onOff(it)) }
+            OptionToggle("强制 viewport array 模拟", "MOBILEGL_ESPRYT_FORCE_VIEWPORT_ARRAY_EMULATION", text) { text = setKey(text, "MOBILEGL_ESPRYT_FORCE_VIEWPORT_ARRAY_EMULATION", onOff(it)) }
+            OptionToggle("非法 image 占位", "MOBILEGL_ESPRYT_INVALID_IMAGE_PLACEHOLDER", text) { text = setKey(text, "MOBILEGL_ESPRYT_INVALID_IMAGE_PLACEHOLDER", onOff(it)) }
+            OptionToggle("未定位 IO blocks", "MOBILEGL_ESPRYT_UNLOCATED_IO_BLOCKS", text) { text = setKey(text, "MOBILEGL_ESPRYT_UNLOCATED_IO_BLOCKS", onOff(it)) }
+            OptionToggle("加宽 packed16 存储", "MOBILEGL_ESPRYT_WIDEN_PACKED16_STORAGE", text) { text = setKey(text, "MOBILEGL_ESPRYT_WIDEN_PACKED16_STORAGE", onOff(it)) }
+            OptionToggle("YUV 驱动转换", "MOBILEGL_YUV_DRIVER_CONVERSION", text) { text = setKey(text, "MOBILEGL_YUV_DRIVER_CONVERSION", onOff(it)) }
             OptionText("上传环大小 (MiB)", "MOBILEGL_PIPE_INDEX_MIRROR_MB", text) { text = setKey(text, "MOBILEGL_PIPE_INDEX_MIRROR_MB", it) }
         }
 
