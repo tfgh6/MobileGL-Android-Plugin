@@ -54,6 +54,9 @@ fun ConfigScreen(
     writer: RuntimeConfigWriter,
     status: RuntimeConfigWriter.Status,
     onStatusChanged: (RuntimeConfigWriter.Status) -> Unit,
+    // Raw keys are merged into PluginConfig.env and persisted; without this the next app
+    // start (or any settings save) rewrote runtime.conf from the stale env map.
+    onSaved: (Map<String, String>) -> Unit = {},
 ) {
     val context = LocalContext.current
     var text by remember { mutableStateOf(writer.readShared() ?: DEFAULT_CONFIG) }
@@ -62,6 +65,7 @@ fun ConfigScreen(
     fun save() {
         val s = writer.writeRaw(text)
         onStatusChanged(s)
+        onSaved(parseEnvKeys(text))
         message = if (s.sharedWritten) "已写入 " + s.sharedPath else "共享路径不可写：" + (s.reason ?: "")
     }
 
@@ -122,12 +126,13 @@ fun ConfigScreen(
             OptionToggle("Coherent AS flush", "MOBILEGL_COHERENT_AS_FLUSH", text) { text = setKey(text, "MOBILEGL_COHERENT_AS_FLUSH", onOff(it)) }
             OptionToggle("宽松语义", "MOBILEGL_RELAXED_SEMANTICS", text) { text = setKey(text, "MOBILEGL_RELAXED_SEMANTICS", onOff(it)) }
             OptionToggle("禁用大缓冲复用", "MOBILEGL_DISABLE_LARGE_BUFFER_ADOPTION", text) { text = setKey(text, "MOBILEGL_DISABLE_LARGE_BUFFER_ADOPTION", onOff(it)) }
+            OptionToggle("禁用 texture view 扩展", "MOBILEGL_DISABLE_TEXTURE_VIEW", text) { text = setKey(text, "MOBILEGL_DISABLE_TEXTURE_VIEW", onOff(it)) }
             OptionToggle("禁用着色器预热", "MOBILEGL_DISABLE_SHADER_PREWARM", text) { text = setKey(text, "MOBILEGL_DISABLE_SHADER_PREWARM", onOff(it)) }
-            OptionToggle("异步着色器编译", "MOBILEGL_ASYNC_SHADER_COMPILE", text) { text = setKey(text, "MOBILEGL_ASYNC_SHADER_COMPILE", onOff(it)) }
+            OptionTristate("异步着色器编译", "MOBILEGL_ASYNC_SHADER_COMPILE", text) { text = setKey(text, "MOBILEGL_ASYNC_SHADER_COMPILE", it) }
             OptionText("异步编译线程数", "MOBILEGL_ASYNC_SHADER_COMPILE_THREADS", text) { text = setKey(text, "MOBILEGL_ASYNC_SHADER_COMPILE_THREADS", it) }
             OptionText("帧在途数", "MOBILEGL_FRAMES_IN_FLIGHT", text) { text = setKey(text, "MOBILEGL_FRAMES_IN_FLIGHT", it) }
             OptionText("GPU 挂起预算 (ms)", "MOBILEGL_GPU_HANG_BUDGET_MS", text) { text = setKey(text, "MOBILEGL_GPU_HANG_BUDGET_MS", it) }
-            OptionToggle("Shader cache", "MOBILEGL_SHADER_CACHE", text) { text = setKey(text, "MOBILEGL_SHADER_CACHE", onOff(it)) }
+            OptionTristate("Shader cache", "MOBILEGL_SHADER_CACHE", text) { text = setKey(text, "MOBILEGL_SHADER_CACHE", it) }
             OptionToggle("SPIR-V 校验", "MOBILEGL_ENABLE_SPIRV_VALIDATION", text) { text = setKey(text, "MOBILEGL_ENABLE_SPIRV_VALIDATION", onOff(it)) }
             OptionToggle("广告 GL_ARB_gpu_shader_fp64", "MOBILEGL_ADVERTISE_FP64", text) { text = setKey(text, "MOBILEGL_ADVERTISE_FP64", onOff(it)) }
             OptionToggle("ES 上下文身份（GLES 3.2）", "MOBILEGL_ES_CONTEXT_IDENTITY", text) { text = setKey(text, "MOBILEGL_ES_CONTEXT_IDENTITY", onOff(it)) }
@@ -157,38 +162,38 @@ fun ConfigScreen(
             Spacer(Modifier.height(6.dp))
             Text("DirectVulkan / Magma", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
             OptionToggle("R11G11B10F 回退格式", "MOBILEGL_MAGMA_R11G11B10F_FALLBACK", text) { text = setKey(text, "MOBILEGL_MAGMA_R11G11B10F_FALLBACK", onOff(it)) }
-            OptionToggle("额外交换链图像", "MOBILEGL_MAGMA_EXTRA_SWAPCHAIN_IMAGES", text) { text = setKey(text, "MOBILEGL_MAGMA_EXTRA_SWAPCHAIN_IMAGES", onOff(it)) }
-            OptionToggle("分片拷贝", "MOBILEGL_MAGMA_SPLIT_SLICE_COPIES", text) { text = setKey(text, "MOBILEGL_MAGMA_SPLIT_SLICE_COPIES", onOff(it)) }
-            OptionToggle("Pass 缓存", "MOBILEGL_MAGMA_PASS_CACHE", text) { text = setKey(text, "MOBILEGL_MAGMA_PASS_CACHE", onOff(it)) }
-            OptionToggle("丢弃后重发状态", "MOBILEGL_MAGMA_REEMIT_STATE_AFTER_DISCARD", text) { text = setKey(text, "MOBILEGL_MAGMA_REEMIT_STATE_AFTER_DISCARD", onOff(it)) }
-            OptionToggle("禁用混合深度写入", "MOBILEGL_MAGMA_DISABLE_BLENDED_DEPTH_WRITE", text) { text = setKey(text, "MOBILEGL_MAGMA_DISABLE_BLENDED_DEPTH_WRITE", onOff(it)) }
+            OptionText("额外交换链图像 (0-16)", "MOBILEGL_MAGMA_EXTRA_SWAPCHAIN_IMAGES", text) { text = setKey(text, "MOBILEGL_MAGMA_EXTRA_SWAPCHAIN_IMAGES", it) }
+            OptionTristate("分片拷贝", "MOBILEGL_MAGMA_SPLIT_SLICE_COPIES", text) { text = setKey(text, "MOBILEGL_MAGMA_SPLIT_SLICE_COPIES", it) }
+            OptionTristate("Pass 缓存", "MOBILEGL_MAGMA_PASS_CACHE", text) { text = setKey(text, "MOBILEGL_MAGMA_PASS_CACHE", it) }
+            OptionTristate("丢弃后重发状态", "MOBILEGL_MAGMA_REEMIT_STATE_AFTER_DISCARD", text) { text = setKey(text, "MOBILEGL_MAGMA_REEMIT_STATE_AFTER_DISCARD", it) }
+            OptionTristate("禁用混合深度写入", "MOBILEGL_MAGMA_DISABLE_BLENDED_DEPTH_WRITE", text) { text = setKey(text, "MOBILEGL_MAGMA_DISABLE_BLENDED_DEPTH_WRITE", it) }
             OptionText("单帧最大绘制数", "MOBILEGL_MAGMA_MAX_DRAWS_PER_COMMAND_BUFFER", text) { text = setKey(text, "MOBILEGL_MAGMA_MAX_DRAWS_PER_COMMAND_BUFFER", it) }
             OptionText("描述符池回收帧数", "MOBILEGL_MAGMA_DESCRIPTOR_TRIM_FRAMES", text) { text = setKey(text, "MOBILEGL_MAGMA_DESCRIPTOR_TRIM_FRAMES", it) }
             OptionToggle("禁用 robust buffer access", "MOBILEGL_MAGMA_DISABLE_ROBUST_BUFFER_ACCESS", text) { text = setKey(text, "MOBILEGL_MAGMA_DISABLE_ROBUST_BUFFER_ACCESS", onOff(it)) }
-            OptionToggle("In-pass clear", "MOBILEGL_MAGMA_INPASS_CLEAR", text) { text = setKey(text, "MOBILEGL_MAGMA_INPASS_CLEAR", onOff(it)) }
-            OptionToggle("primgen query 重路由", "MOBILEGL_MAGMA_PRIMGEN_QUERY_REROUTE", text) { text = setKey(text, "MOBILEGL_MAGMA_PRIMGEN_QUERY_REROUTE", onOff(it)) }
-            OptionToggle("顶点转换缓存", "MOBILEGL_MAGMA_VERTEX_CONVERSION_CACHE", text) { text = setKey(text, "MOBILEGL_MAGMA_VERTEX_CONVERSION_CACHE", onOff(it)) }
-            OptionToggle("写入重命名", "MOBILEGL_MAGMA_WRITE_RENAME", text) { text = setKey(text, "MOBILEGL_MAGMA_WRITE_RENAME", onOff(it)) }
+            OptionTristate("In-pass clear", "MOBILEGL_MAGMA_INPASS_CLEAR", text) { text = setKey(text, "MOBILEGL_MAGMA_INPASS_CLEAR", it) }
+            OptionTristate("primgen query 重路由", "MOBILEGL_MAGMA_PRIMGEN_QUERY_REROUTE", text) { text = setKey(text, "MOBILEGL_MAGMA_PRIMGEN_QUERY_REROUTE", it) }
+            OptionTristate("顶点转换缓存", "MOBILEGL_MAGMA_VERTEX_CONVERSION_CACHE", text) { text = setKey(text, "MOBILEGL_MAGMA_VERTEX_CONVERSION_CACHE", it) }
+            OptionTristate("写入重命名", "MOBILEGL_MAGMA_WRITE_RENAME", text) { text = setKey(text, "MOBILEGL_MAGMA_WRITE_RENAME", it) }
             OptionToggle("允许非法 SPIR-V", "MOBILEGL_MAGMA_ALLOW_INVALID_SPIRV", text) { text = setKey(text, "MOBILEGL_MAGMA_ALLOW_INVALID_SPIRV", onOff(it)) }
-            OptionToggle("E5 raw reads", "MOBILEGL_MAGMA_E5_RAW_READS", text) { text = setKey(text, "MOBILEGL_MAGMA_E5_RAW_READS", onOff(it)) }
+            OptionTristate("E5 raw reads", "MOBILEGL_MAGMA_E5_RAW_READS", text) { text = setKey(text, "MOBILEGL_MAGMA_E5_RAW_READS", it) }
             Spacer(Modifier.height(6.dp))
             Text("DirectGLES / Espryt", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
             OptionToggle("启用 texture view", "MOBILEGL_ESPRYT_ENABLE_TEXTURE_VIEW", text) { text = setKey(text, "MOBILEGL_ESPRYT_ENABLE_TEXTURE_VIEW", onOff(it)) }
             OptionToggle("使用 ANGLE", "MOBILEGL_ESPRYT_USE_ANGLE", text) { text = setKey(text, "MOBILEGL_ESPRYT_USE_ANGLE", onOff(it)) }
             OptionToggle("禁用上传环", "MOBILEGL_ESPRYT_DISABLE_UPLOAD_RING", text) { text = setKey(text, "MOBILEGL_ESPRYT_DISABLE_UPLOAD_RING", onOff(it)) }
             OptionToggle("避免 sampler mipmap min filter", "MOBILEGL_ESPRYT_AVOID_SAMPLER_MIPMAP_MIN_FILTER", text) { text = setKey(text, "MOBILEGL_ESPRYT_AVOID_SAMPLER_MIPMAP_MIN_FILTER", onOff(it)) }
-            OptionToggle("VAO shadow", "MOBILEGL_ESPRYT_VAO_SHADOW", text) { text = setKey(text, "MOBILEGL_ESPRYT_VAO_SHADOW", onOff(it)) }
-            OptionToggle("延迟 geometry emits", "MOBILEGL_ESPRYT_DEFER_GEOMETRY_EMITS", text) { text = setKey(text, "MOBILEGL_ESPRYT_DEFER_GEOMETRY_EMITS", onOff(it)) }
+            OptionTristate("VAO shadow", "MOBILEGL_ESPRYT_VAO_SHADOW", text) { text = setKey(text, "MOBILEGL_ESPRYT_VAO_SHADOW", it) }
+            OptionTristate("延迟 geometry emits", "MOBILEGL_ESPRYT_DEFER_GEOMETRY_EMITS", text) { text = setKey(text, "MOBILEGL_ESPRYT_DEFER_GEOMETRY_EMITS", it) }
             OptionToggle("强制 depth/stencil 回读模拟", "MOBILEGL_ESPRYT_FORCE_DS_READBACK_EMULATION", text) { text = setKey(text, "MOBILEGL_ESPRYT_FORCE_DS_READBACK_EMULATION", onOff(it)) }
             OptionToggle("禁用 invalidate flush", "MOBILEGL_ESPRYT_DISABLE_INVALIDATE_FLUSH", text) { text = setKey(text, "MOBILEGL_ESPRYT_DISABLE_INVALIDATE_FLUSH", onOff(it)) }
             OptionToggle("禁用 UBO ring", "MOBILEGL_ESPRYT_DISABLE_UBO_RING", text) { text = setKey(text, "MOBILEGL_ESPRYT_DISABLE_UBO_RING", onOff(it)) }
             OptionToggle("禁用 unpack ring", "MOBILEGL_ESPRYT_DISABLE_UNPACK_RING", text) { text = setKey(text, "MOBILEGL_ESPRYT_DISABLE_UNPACK_RING", onOff(it)) }
-            OptionToggle("Atomic subgroup scratch", "MOBILEGL_ESPRYT_ATOMIC_SUBGROUP_SCRATCH", text) { text = setKey(text, "MOBILEGL_ESPRYT_ATOMIC_SUBGROUP_SCRATCH", onOff(it)) }
+            OptionTristate("Atomic subgroup scratch", "MOBILEGL_ESPRYT_ATOMIC_SUBGROUP_SCRATCH", text) { text = setKey(text, "MOBILEGL_ESPRYT_ATOMIC_SUBGROUP_SCRATCH", it) }
             OptionToggle("避免显式 LOD bias", "MOBILEGL_ESPRYT_AVOID_EXPLICIT_LOD_BIAS", text) { text = setKey(text, "MOBILEGL_ESPRYT_AVOID_EXPLICIT_LOD_BIAS", onOff(it)) }
-            OptionToggle("强制 viewport array 模拟", "MOBILEGL_ESPRYT_FORCE_VIEWPORT_ARRAY_EMULATION", text) { text = setKey(text, "MOBILEGL_ESPRYT_FORCE_VIEWPORT_ARRAY_EMULATION", onOff(it)) }
-            OptionToggle("非法 image 占位", "MOBILEGL_ESPRYT_INVALID_IMAGE_PLACEHOLDER", text) { text = setKey(text, "MOBILEGL_ESPRYT_INVALID_IMAGE_PLACEHOLDER", onOff(it)) }
-            OptionToggle("未定位 IO blocks", "MOBILEGL_ESPRYT_UNLOCATED_IO_BLOCKS", text) { text = setKey(text, "MOBILEGL_ESPRYT_UNLOCATED_IO_BLOCKS", onOff(it)) }
-            OptionToggle("加宽 packed16 存储", "MOBILEGL_ESPRYT_WIDEN_PACKED16_STORAGE", text) { text = setKey(text, "MOBILEGL_ESPRYT_WIDEN_PACKED16_STORAGE", onOff(it)) }
+            OptionTristate("强制 viewport array 模拟", "MOBILEGL_ESPRYT_FORCE_VIEWPORT_ARRAY_EMULATION", text) { text = setKey(text, "MOBILEGL_ESPRYT_FORCE_VIEWPORT_ARRAY_EMULATION", it) }
+            OptionTristate("非法 image 占位", "MOBILEGL_ESPRYT_INVALID_IMAGE_PLACEHOLDER", text) { text = setKey(text, "MOBILEGL_ESPRYT_INVALID_IMAGE_PLACEHOLDER", it) }
+            OptionTristate("未定位 IO blocks", "MOBILEGL_ESPRYT_UNLOCATED_IO_BLOCKS", text) { text = setKey(text, "MOBILEGL_ESPRYT_UNLOCATED_IO_BLOCKS", it) }
+            OptionTristate("加宽 packed16 存储", "MOBILEGL_ESPRYT_WIDEN_PACKED16_STORAGE", text) { text = setKey(text, "MOBILEGL_ESPRYT_WIDEN_PACKED16_STORAGE", it) }
             OptionToggle("YUV 驱动转换", "MOBILEGL_YUV_DRIVER_CONVERSION", text) { text = setKey(text, "MOBILEGL_YUV_DRIVER_CONVERSION", onOff(it)) }
             OptionText("上传环大小 (MiB)", "MOBILEGL_PIPE_INDEX_MIRROR_MB", text) { text = setKey(text, "MOBILEGL_PIPE_INDEX_MIRROR_MB", it) }
         }
@@ -245,6 +250,41 @@ private fun OptionSelect(label: String, options: List<String>, value: String, on
             }
         }
     }
+}
+
+/**
+ * Official core keys read through ConfigLoader's QueryEnvQuirkOverride are tri-state:
+ * unset/empty/"auto" keeps auto-detection, forceon/on forces the quirk, forceoff/off/no
+ * disables it. A plain 0/1 toggle would silently turn every "off" into ForceOff, so write
+ * the named values the core understands. (A toggle's "off" is ForceOff, not Auto.)
+ */
+@Composable
+private fun OptionTristate(label: String, key: String, text: String, onChange: (String) -> Unit) {
+    val raw = readKey(text, key, "").lowercase().trim()
+    val current = when (raw) {
+        "", "auto" -> "Auto"
+        "forceon", "on", "1", "true", "yes" -> "ForceOn"
+        else -> "ForceOff"
+    }
+    OptionSelect(label, listOf("Auto", "ForceOn", "ForceOff"), current, onChange)
+}
+
+/** Keys edited in the raw box that must be merged back into PluginConfig.env. */
+private fun parseEnvKeys(text: String): Map<String, String> {
+    // RENDERER_MODE/RENDERER_SO/SFPEW_ENABLED are regenerated from the typed config by
+    // RuntimeConfigWriter; merging them would duplicate or fight that.
+    val managed = setOf("RENDERER_MODE", "RENDERER_SO", "SFPEW_ENABLED")
+    val name = Regex("[A-Z][A-Z0-9_]{1,63}")
+    val out = LinkedHashMap<String, String>()
+    text.lineSequence().forEach { raw ->
+        val line = raw.trim()
+        if (line.isEmpty() || line.startsWith("#") || !line.contains('=')) return@forEach
+        val key = line.substringBefore('=').trim()
+        val value = line.substringAfter('=').trim()
+        if (key in managed || !name.matches(key)) return@forEach
+        out[key] = value
+    }
+    return out
 }
 
 @Composable

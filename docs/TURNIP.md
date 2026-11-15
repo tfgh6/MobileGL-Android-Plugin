@@ -75,9 +75,9 @@ UI 可手动切换内置变体；外部导入仍标实验。
 ## 驱动自检
 
 - 驱动自检仍使用官方 Driver POST 的检查项和判定，不额外增加 Turnip 专用行。
-- 只切换 Vulkan loader：Turnip 开启时自检通过 Turnip，关闭时使用系统 libvulkan。
-- 自检开始前会重新读取 `MOBILEGL_TURNIP_ENABLED`；切换开关后直接重跑自检即可，无需重启 App（游戏渲染进程仍需重启游戏才能换驱动）。
-- 自检的 “Vulkan loader initialized with Turnip / with system libvulkan” 一行显示本次实际使用的驱动来源。
+- **内置官方核下**：自检的 `Vulkan instance` 行显示系统 `libvulkan`（或启动器预载的 loader），不会显示 Turnip。
+- **外部增强核下**：Turnip 开启时自检通过 Turnip，关闭时使用系统 libvulkan；自检开始前会重新读取 `MOBILEGL_TURNIP_ENABLED`，切换开关后直接重跑自检即可，无需重启 App（游戏渲染进程仍需重启游戏才能换驱动）。
+- 增强核的 `Vulkan loader initialized with Turnip / with system libvulkan` 一行显示本次实际使用的驱动来源。
 
 ## 诊断日志（无需电脑）
 

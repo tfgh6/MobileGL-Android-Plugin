@@ -237,12 +237,16 @@ fun MobileGlPluginApp() {
         // The bundled core is now the official 26.11 build (system libvulkan), which has no
         // Turnip loader. Only a core built from this project - bundled previously or imported
         // as an external .so - honors MOBILEGL_TURNIP_*. Keep the switch honest about that.
+        // The capability probe scans the whole 11-16 MiB library, so keep it off the UI thread.
         val activeCorePath = config.activeRendererLibPath
-        val coreSupportsTurnip = remember(activeCorePath) {
-            runCatching { turnipRepository.coreSupportsTurnip(activeCorePath) }.getOrDefault(false)
+        var coreSupportsTurnip by remember(activeCorePath) { mutableStateOf<Boolean?>(null) }
+        LaunchedEffect(activeCorePath) {
+            coreSupportsTurnip = withContext(Dispatchers.IO) {
+                runCatching { turnipRepository.coreSupportsTurnip(activeCorePath) }.getOrDefault(false)
+            }
         }
         LaunchedEffect(coreSupportsTurnip, config.turnipEnabled) {
-            if (!coreSupportsTurnip && config.turnipEnabled) {
+            if (coreSupportsTurnip == false && config.turnipEnabled) {
                 diagnostics.record(
                     "turnip",
                     "自动关闭 · 当前核心不含 Turnip 加载器（" +
@@ -339,7 +343,7 @@ fun MobileGlPluginApp() {
                 runtimeConfigPath = runtimeStatus.sharedPath,
                 runtimeConfigSharedWritten = runtimeStatus.sharedWritten,
                 activeRendererLibPath = config.activeRendererLibPath,
-                coreSupportsTurnip = coreSupportsTurnip,
+                coreSupportsTurnip = coreSupportsTurnip != false,
                 selfTestLines = selfTestSummaryLines(report),
             )
         }
@@ -546,7 +550,7 @@ fun MobileGlPluginApp() {
                                 )
                             },
                             externalCoreActive = config.activeRendererLibPath != null,
-                            coreSupportsTurnip = coreSupportsTurnip,
+                            coreSupportsTurnip = coreSupportsTurnip != false,
                             onUseBundledCore = {
                                 val updated = config.copy(
                                     activeRendererLibPath = null,
@@ -566,6 +570,7 @@ fun MobileGlPluginApp() {
                             writer = runtimeWriter,
                             status = runtimeStatus,
                             onStatusChanged = { runtimeStatus = it },
+                            onSaved = { values -> persist(config.copy(env = config.env + values)) },
                         )
                         Dest.SelfTest -> SelfTestScreen(repository = selfTestRepository, config = config)
                     }

@@ -7,14 +7,16 @@ import android.os.Environment
 import java.io.File
 
 /**
- * Writes the key=value file the native ConfigLoader reads before libMobileGL starts.
+ * Writes the key=value file the native side consumes.
  *
  * The game process is the launcher's process, so the file has to live on shared storage:
  * /sdcard/MobileGL/runtime.conf. On Android 11+ that requires "all files access"; when the
  * user has not granted it we still write a private copy and report the fallback path.
  *
- * The native side reads MOBILEGL_CONFIG_FILE first, then this default path. The proxy also
- * exports these values into the game process so the file stays authoritative for the plugin UI.
+ * Note: the official 26.11 core does NOT read this path by default; libRendererProxy.so reads
+ * the file, exports its keys as environment variables and points MOBILEGL_CONFIG_FILE at it
+ * before dlopen'ing the core. Our own (fork) core reads the default path directly. Both rely
+ * on the proxy end to end; without it, only the launcher environment reaches the core.
  */
 class RuntimeConfigWriter(private val context: Context) {
     data class Status(

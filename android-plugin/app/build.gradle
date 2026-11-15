@@ -67,12 +67,16 @@ def mobileGlRendererConfig = { String backendType ->
              items: [defaultValue: 'Auto', values: ['Auto', 'ForceOn', 'ForceOff']]],
             [type: 'ToggleableEnv', key: 'MOBILEGL_MAGMA_R11G11B10F_FALLBACK', value: '1',
              title: [key: 'mobilegl_r11g11b10f_fallback_title'], toggle: false],
-            [type: 'CustomizableEnv', key: 'MOBILEGL_FRAMES_IN_FLIGHT', defaultValue: '3'],
-            [type: 'ToggleableEnv', key: 'MOBILEGL_ESPRYT_USE_ANGLE', value: '1', toggle: false],
+            [type: 'CustomizableEnv', key: 'MOBILEGL_FRAMES_IN_FLIGHT', defaultValue: '3',
+             title: [key: 'mobilegl_frames_in_flight_title']],
+            [type: 'ToggleableEnv', key: 'MOBILEGL_ESPRYT_USE_ANGLE', value: '1',
+             title: [key: 'mobilegl_espryt_use_angle_title'], toggle: false],
             [type: 'ToggleableEnv', key: 'MOBILEGL_ESPRYT_AVOID_SAMPLER_MIPMAP_MIN_FILTER', value: '1',
              title: [key: 'mobilegl_avoid_sampler_mipmap_min_filter_title'], toggle: false],
-            [type: 'ToggleableEnv', key: 'MOBILEGL_COHERENT_AS_FLUSH', value: '1', toggle: false],
-            [type: 'ToggleableEnv', key: 'MOBILEGL_RELAXED_SEMANTICS', value: '1', toggle: false],
+            [type: 'ToggleableEnv', key: 'MOBILEGL_COHERENT_AS_FLUSH', value: '1',
+             title: [key: 'mobilegl_coherent_as_flush_title'], toggle: false],
+            [type: 'ToggleableEnv', key: 'MOBILEGL_RELAXED_SEMANTICS', value: '1',
+             title: [key: 'mobilegl_relaxed_semantics_title'], toggle: false],
     ]
     def glLib = !mobileGlPrebuiltLibsDir.isEmpty()
             ? '**|libRendererProxy.so'
