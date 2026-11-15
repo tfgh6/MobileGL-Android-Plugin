@@ -20,9 +20,13 @@ data class PluginConfig(
     val activeRendererLibPath: String? = null,
     val activeRendererVersion: String? = null,
     val activeRendererCommit: String? = null,
+    // Turnip is opt-in. The path is the GPU-specific bundled variant chosen by
+    // TurnipRepository (or an imported external .so); null while the switch is off.
     val turnipEnabled: Boolean = false,
     val turnipDriverPath: String? = null,
     val turnipDriverVersion: String? = null,
+    // Opt-in UI/native diagnostics. Defaults off so a normal install writes no log files;
+    // the runtime.conf mirror is MOBILEGL_DIAG_LOG_ENABLED.
     val diagnosticsEnabled: Boolean = false,
     val env: Map<String, String> = defaultEnv("DirectVulkan"),
     val theme: String = "dark",

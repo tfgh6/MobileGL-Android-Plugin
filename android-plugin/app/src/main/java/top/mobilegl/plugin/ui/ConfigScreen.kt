@@ -81,7 +81,7 @@ fun ConfigScreen(
                 style = MaterialTheme.typography.bodySmall,
             )
             Text(
-                "官方 CI 的 libMobileGL.so 只读环境变量、不读此文件；本项目补丁库与后续 PanVK 驱动会读取。",
+                "libRendererProxy 启动游戏时会读取此文件并注入环境变量；未走 proxy 的直连包需要启动器直接设置环境变量。",
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(top = 6.dp),
@@ -141,7 +141,7 @@ fun ConfigScreen(
             )
             Spacer(Modifier.height(6.dp))
             Text("DirectVulkan / Magma", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold)
-            OptionToggle("R11G11B10F 回退格式", "MOBILEGL_VULKAN_R11G11B10F_FALLBACK", text) { text = setKey(text, "MOBILEGL_VULKAN_R11G11B10F_FALLBACK", onOff(it)) }
+            OptionToggle("R11G11B10F 回退格式", "MOBILEGL_MAGMA_R11G11B10F_FALLBACK", text) { text = setKey(text, "MOBILEGL_MAGMA_R11G11B10F_FALLBACK", onOff(it)) }
             OptionToggle("额外交换链图像", "MOBILEGL_MAGMA_EXTRA_SWAPCHAIN_IMAGES", text) { text = setKey(text, "MOBILEGL_MAGMA_EXTRA_SWAPCHAIN_IMAGES", onOff(it)) }
             OptionToggle("分片拷贝", "MOBILEGL_MAGMA_SPLIT_SLICE_COPIES", text) { text = setKey(text, "MOBILEGL_MAGMA_SPLIT_SLICE_COPIES", onOff(it)) }
             OptionToggle("Pass 缓存", "MOBILEGL_MAGMA_PASS_CACHE", text) { text = setKey(text, "MOBILEGL_MAGMA_PASS_CACHE", onOff(it)) }

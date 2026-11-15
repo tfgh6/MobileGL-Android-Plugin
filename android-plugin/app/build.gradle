@@ -244,6 +244,11 @@ android {
             minifyEnabled false
             if (releaseSigningReady) {
                 signingConfig signingConfigs.release
+            } else if (fixedDebugKeystore.exists()) {
+                // Forks and local CI builds usually have no release-signing secrets. Use the
+                // checked-in debug key so the release variant stays installable for testing
+                // instead of producing an unsigned APK (the fork workflow verifies signings).
+                signingConfig signingConfigs.debug
             }
         }
     }

@@ -15,13 +15,54 @@
 #include <strings.h>
 #include <sys/stat.h>
 #include <sys/syscall.h>
+#include <time.h>
 #include <unistd.h>
+#include <stdarg.h>
 
 #include "proxy_symbols.h"
 
 #define TAG "RendererProxy"
-#define LOGI(...) __android_log_print(ANDROID_LOG_INFO, TAG, __VA_ARGS__)
-#define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, TAG, __VA_ARGS__)
+// Optional shared diagnostics. The plugin UI writes MOBILEGL_DIAG_LOG_ENABLED into
+// runtime.conf; read_config() propagates it with setenv(), so a disabled toggle is a
+// zero-cost path here (no fopen). The game process usually cannot read logcat from the
+// plugin, so this file is what the in-app "share log" screen uploads.
+#define DIAG_LOG_DIR "/sdcard/MobileGL/logs"
+#define DIAG_LOG_FILE DIAG_LOG_DIR "/game.log"
+
+static void diag_append(const char *level, const char *fmt, ...) {
+    const char *enabled = getenv("MOBILEGL_DIAG_LOG_ENABLED");
+    if (!enabled || !enabled[0] || strcmp(enabled, "0") == 0 || strcasecmp(enabled, "false") == 0) {
+        return;
+    }
+    const char *override_path = getenv("MOBILEGL_DIAG_LOG");
+    const char *path = (override_path && override_path[0]) ? override_path : DIAG_LOG_FILE;
+    mkdir("/sdcard/MobileGL", 0770);
+    mkdir(DIAG_LOG_DIR, 0770);
+    struct stat st;
+    if (stat(path, &st) == 0 && st.st_size > 512 * 1024) {
+        char old_path[PATH_MAX];
+        snprintf(old_path, sizeof(old_path), "%s.old", path);
+        remove(old_path);
+        rename(path, old_path);
+    }
+    FILE *file = fopen(path, "a");
+    if (!file) return;
+    time_t now = time(NULL);
+    struct tm local;
+    localtime_r(&now, &local);
+    char timestamp[32];
+    strftime(timestamp, sizeof(timestamp), "%m-%d %H:%M:%S", &local);
+    fprintf(file, "%s %s [%s] ", timestamp, level, TAG);
+    va_list args;
+    va_start(args, fmt);
+    vfprintf(file, fmt, args);
+    va_end(args);
+    fputc('\n', file);
+    fclose(file);
+}
+
+#define LOGI(...) do { __android_log_print(ANDROID_LOG_INFO, TAG, __VA_ARGS__); diag_append("I", __VA_ARGS__); } while (0)
+#define LOGE(...) do { __android_log_print(ANDROID_LOG_ERROR, TAG, __VA_ARGS__); diag_append("E", __VA_ARGS__); } while (0)
 
 // Never abort the whole game for one unwrapped extension: return 0 instead.
 // EGL init paths are always resolved; this only guards optional Desktop-GL
@@ -122,8 +163,8 @@ static int read_config(char *mode, size_t mode_len, char *so, size_t so_len) {
         }
     }
     fclose(file);
-    // A present config file must opt in explicitly. A missing file keeps the
-    // historical default (load SFPEW), which is what shipped builds relied on.
+    // A missing config file falls back to the direct MobileGL path: SFPEW is opt-in since
+    // the proxy became the default renderer entry point.
     if (!mode[0]) snprintf(mode, mode_len, "direct");
     LOGI("config %s: RENDERER_MODE=%s RENDERER_SO=%s", path, mode, so[0] ? so : "(bundled)");
     return 1;
@@ -201,7 +242,15 @@ __attribute__((constructor)) static void init_renderer_proxy(void) {
         } else {
             sibling_path("libMobileGL.so", backend_path, sizeof(backend_path));
         }
-        setenv("SFPEW_EGL", backend_path, 1);
+        // runtime.conf may pick the SFPEW backend (libMobileGL.so / libEGL.so); an explicit
+        // value wins, otherwise default to the bundled MobileGL library. Forcing the default
+        // unconditionally used to make the UI's backend choice a no-op.
+        const char *configured_egl = getenv("SFPEW_EGL");
+        if (configured_egl && configured_egl[0]) {
+            snprintf(backend_path, sizeof(backend_path), "%s", configured_egl);
+        } else {
+            setenv("SFPEW_EGL", backend_path, 1);
+        }
         if (target) {
             LOGI("SFPEW enabled: %s loaded, backend=%s", sfpew_path, backend_path);
         } else {

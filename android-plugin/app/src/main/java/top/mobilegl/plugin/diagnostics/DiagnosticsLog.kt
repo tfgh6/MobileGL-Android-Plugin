@@ -116,6 +116,7 @@ class DiagnosticsLog(context: Context) {
      * When the shared path is not usable the entry falls back to the private copy.
      */
     @Synchronized
+    /** Writes one UI-side line. No-op unless the user enabled diagnostics. */
     fun record(category: String, message: String) {
         if (!enabled) return
         val line = timestamp() + " [" + category + "] " + message + "\n"
@@ -139,6 +140,7 @@ class DiagnosticsLog(context: Context) {
 
     /** Clears the UI log (shared and private copies plus rotated files). The native game log is untouched. */
     @Synchronized
+    /** Clears only the UI log; the native game.log is read-only for the app. */
     fun clear(): Boolean {
         var cleared = false
         val files = listOf(
@@ -160,6 +162,10 @@ class DiagnosticsLog(context: Context) {
      * sharing. Keeps every UI/game line (up to [MAX_READ_BYTES] each) instead of a clipboard
      * text limit, and prunes old exports.
      */
+    /**
+     * Builds the file shared through FileProvider. Unlike shortSummary(), this keeps up to
+     * 1 MiB of UI and game logs so WeChat/QQ never truncate the actual diagnostic tail.
+     */
     fun exportReport(state: DiagnosticsSnapshot): File {
         val dir = exportDir()
         dir.mkdirs()
@@ -171,6 +177,7 @@ class DiagnosticsLog(context: Context) {
     }
 
     /** Full combined report: header + UI log + native game log (without file-export bookkeeping). */
+    /** Full report (headers + UI log + native game.log) used for export/preview. */
     fun snapshot(state: DiagnosticsSnapshot): String = buildString {
         append(header(state))
         appendLine()
