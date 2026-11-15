@@ -24,6 +24,11 @@ data class DiagnosticsSnapshot(
     val autoVariantLabel: String?,
     val runtimeConfigPath: String,
     val runtimeConfigSharedWritten: Boolean,
+    // Null means the bundled libMobileGL.so is active. A non-null path is the imported
+    // external core, which does not contain the built-in Turnip loader.
+    val activeRendererLibPath: String? = null,
+    // Rendered lines of the last Driver POST (renderer/verdict/loader row), or null if none.
+    val selfTestLines: String? = null,
 )
 
 /** Current log file locations/sizes for the in-app info card. */
@@ -235,6 +240,16 @@ class DiagnosticsLog(context: Context) {
             appendLine("后端: " + state.backend + " · SFPEW=" + if (state.sfpewEnabled) "开" else "关")
             appendLine("GPU: " + state.gpuLabel + " · 自动变体=" + (state.autoVariantLabel ?: "无（非 Adreno）"))
             appendLine(
+                "渲染核心: " + if (state.activeRendererLibPath == null) {
+                    "内置 libMobileGL.so（含 Turnip/诊断补丁）"
+                } else {
+                    "外部库 " + state.activeRendererLibPath + "（官方核心，不含内置 Turnip 加载器）"
+                }
+            )
+            if (state.turnipEnabled && state.activeRendererLibPath != null) {
+                appendLine("警告: 已启用 Turnip，但当前渲染核心是外部库；外部核心没有内置 Turnip 加载器，Turnip 不会生效。")
+            }
+            appendLine(
                 "Turnip: " + if (state.turnipEnabled) {
                     "已启用 · 路径=" + (state.turnipDriverPath ?: "-") + " · 版本=" + (state.turnipDriverVersion ?: "未知")
                 } else {
@@ -250,6 +265,14 @@ class DiagnosticsLog(context: Context) {
                     })
             )
             appendLine("诊断记录: " + if (state.diagnosticsEnabled) "开（MOBILEGL_DIAG_LOG_ENABLED=1）" else "关（MOBILEGL_DIAG_LOG_ENABLED=0）")
+            appendLine()
+            if (!state.selfTestLines.isNullOrBlank()) {
+                appendLine("--- 上次驱动自检 ---")
+                appendLine(state.selfTestLines)
+            } else {
+                appendLine("上次驱动自检: 未运行（运行一次“驱动自检”后此处会显示实际 Vulkan 驱动来源）")
+            }
+            appendLine()
             appendLine(
                 "UI 日志: " + uiLog.absolutePath + " (" + formatSize(if (uiLog.isFile) uiLog.length() else 0L) + ")" +
                     if (fallback) " · 共享权限不可用，已回退私有路径" else ""

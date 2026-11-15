@@ -65,6 +65,8 @@ fun DriverScreen(
     onClearActive: () -> Unit,
     onActivateLibrary: (ExternalLibrary?) -> Unit,
     onTurnipChange: (Boolean, String?, String?) -> Unit,
+    externalCoreActive: Boolean,
+    onUseBundledCore: () -> Unit,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -187,12 +189,15 @@ fun DriverScreen(
             onDelete = { driver -> pendingDeleteTurnip = driver },
             onImport = { turnipImporter.launch(arrayOf("application/octet-stream", "*/*")) },
             onRefresh = onRefresh,
+            externalCoreActive = externalCoreActive,
+            onUseBundledCore = onUseBundledCore,
         )
 
         SectionCard("外部 .so（更新渲染器 / SFPEW）") {
             Text(
                 "可导入官方 Action 构建的 libMobileGL.so，或 libSimpleFPEWrapper.so。会校验 arm64 ELF。" +
-                    "启用后：启动游戏时由 libRendererProxy.so 读取所选库；驱动自检也用它。",
+                    "启用后：启动游戏时由 libRendererProxy.so 读取所选库；驱动自检也用它。" +
+                    "注意：外部核心不含本项目的 Turnip 加载器，启用后内置 Turnip 不会生效。",
                 style = MaterialTheme.typography.bodySmall,
             )
             Spacer(Modifier.height(8.dp))
@@ -333,6 +338,8 @@ private fun TurnipCard(
     onDelete: (TurnipDriver) -> Unit,
     onImport: () -> Unit,
     onRefresh: () -> Unit,
+    externalCoreActive: Boolean,
+    onUseBundledCore: () -> Unit,
 ) {
     SectionCard("骁龙 Turnip（Adreno · 内置驱动）") {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -385,6 +392,16 @@ private fun TurnipCard(
                 style = MaterialTheme.typography.labelSmall,
                 color = verdictColor("FAIL"),
             )
+        }
+        if (externalCoreActive) {
+            Text(
+                "注意：当前渲染核心是“外部 .so”（官方核心），它不包含本项目的 Turnip 加载器，" +
+                    "所以 Turnip 开关不会生效。要测试内置 Turnip，请先切回内置核心。",
+                style = MaterialTheme.typography.labelSmall,
+                color = verdictColor("FAIL"),
+            )
+            Spacer(Modifier.height(4.dp))
+            OutlinedButton(onClick = onUseBundledCore) { Text("切回内置核心") }
         }
         if (selected?.experimental == true) {
             Text(
@@ -455,10 +472,15 @@ private fun TurnipCard(
         Spacer(Modifier.height(8.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(enabled = !importing, onClick = onImport) {
-                Text(if (importing) "导入中…" else "导入外部 Turnip .so")
+                Text(if (importing) "导入中…" else "导入外部 Turnip（.so / .zip）")
             }
             OutlinedButton(onClick = onRefresh) { Text("刷新") }
         }
+        Text(
+            "支持 Banners-Turnip 发布的 zip（自动取其中的 libvulkan_freedreno.so），也支持单个 .so。",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
         message?.let {
             Spacer(Modifier.height(8.dp))
             Text(it, style = MaterialTheme.typography.bodySmall)

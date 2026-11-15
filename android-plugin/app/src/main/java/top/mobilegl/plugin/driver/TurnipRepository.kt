@@ -8,6 +8,7 @@ import android.os.Environment
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.util.zip.ZipFile
 
 /** Where the Turnip library was found. */
 enum class TurnipDriverSource { Bundled, External }
@@ -247,6 +248,21 @@ class TurnipRepository(private val context: Context) {
                 context.contentResolver.openInputStream(uri)?.use { input ->
                     temp.outputStream().use { output -> input.copyTo(output, 1024 * 1024) }
                 } ?: error("无法读取所选文件")
+                // Banners-Turnip ships .zip bundles (libvulkan_freedreno.so + meta.json).
+                // Extract the driver so the normal ELF/marker validation below still applies.
+                if (isZipArchive(temp)) {
+                    val extracted = File(context.cacheDir, "turnip-unzip-" + System.currentTimeMillis() + ".so")
+                    try {
+                        if (!extractDriverFromZip(temp, extracted)) {
+                            error("压缩包里没有找到 Turnip .so（需要 Banners-Turnip 的 .zip）")
+                        }
+                        if (!extracted.renameTo(temp)) {
+                            extracted.copyTo(temp, overwrite = true)
+                        }
+                    } finally {
+                        extracted.delete()
+                    }
+                }
                 if (temp.length() > MAX_LIBRARY_BYTES) error("文件超过 128 MiB，不是 Turnip 驱动库")
                 if (temp.length() < MIN_LIBRARY_BYTES) {
                     error("文件过小（" + (temp.length() / 1024) + " KiB），不是 Turnip 驱动库")
@@ -255,8 +271,8 @@ class TurnipRepository(private val context: Context) {
                 if (!hasTurnipMarker(temp)) error("不是 Turnip / Freedreno 驱动库（缺少 freedreno 标识）")
                 externalRoot.mkdirs()
                 if (!externalRoot.isDirectory) error("无法创建 " + EXTERNAL_DIR + "（请检查文件访问权限）")
-                val name = sanitize(uri.lastPathSegment?.substringAfterLast('/') ?: "libturnip_imported.so")
-                    .let { if (it.endsWith(".so", true)) it else it + ".so" }
+                val base = sanitize(uri.lastPathSegment?.substringAfterLast('/') ?: "libturnip_imported.so")
+                val name = base.substringBeforeLast('.', base).ifBlank { "libturnip_imported" } + ".so"
                 val target = File(externalRoot, name)
                 temp.copyTo(target, overwrite = true)
                 describe(target, TurnipDriverSource.External, null)
@@ -327,6 +343,46 @@ class TurnipRepository(private val context: Context) {
             detail = "未检测到 Adreno，无法确认是否支持 Turnip；如为 Mali/PowerVR 请勿启用",
             samsung = samsung,
         )
+    }
+
+    private fun isZipArchive(file: File): Boolean {
+        val head = ByteArray(4)
+        val read = runCatching { file.inputStream().use { it.read(head) } }.getOrDefault(-1)
+        return read == 4 &&
+            head[0] == 'P'.code.toByte() && head[1] == 'K'.code.toByte() &&
+            head[2] == 0x03.toByte() && head[3] == 0x04.toByte()
+    }
+
+    /**
+     * Extracts the AArch64 driver from a Banners-Turnip .zip bundle. The bundles put
+     * libvulkan_freedreno.so and meta.json at the archive root; older ones use nested names,
+     * so pick the largest .so mentioning turnip/freedreno and fall back to the largest .so.
+     */
+    private fun extractDriverFromZip(zip: File, out: File): Boolean {
+        ZipFile(zip).use { archive ->
+            val candidates = archive.entries().asSequence()
+                .filter { !it.isDirectory && it.name.endsWith(".so", true) }
+                .sortedByDescending { it.size }
+                .toList()
+            if (candidates.isEmpty()) return false
+            val entry = candidates.firstOrNull {
+                it.name.contains("turnip", ignoreCase = true) || it.name.contains("freedreno", ignoreCase = true)
+            } ?: candidates.first()
+            var total = 0L
+            out.outputStream().use { output ->
+                archive.getInputStream(entry).use { input ->
+                    val buffer = ByteArray(1024 * 1024)
+                    while (true) {
+                        val read = input.read(buffer)
+                        if (read <= 0) break
+                        total += read
+                        if (total > MAX_LIBRARY_BYTES) return false
+                        output.write(buffer, 0, read)
+                    }
+                }
+            }
+            return total >= MIN_LIBRARY_BYTES
+        }
     }
 
     fun isArm64Elf(file: File): Boolean {

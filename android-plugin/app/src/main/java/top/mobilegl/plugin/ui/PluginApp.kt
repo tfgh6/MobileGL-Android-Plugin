@@ -112,6 +112,8 @@ import top.mobilegl.plugin.selftest.BackendReport
 import top.mobilegl.plugin.selftest.GlInfoProbe
 import top.mobilegl.plugin.selftest.SelfTestRepository
 import top.mobilegl.plugin.selftest.SelfTestResult
+import java.text.SimpleDateFormat
+import java.util.Date
 import java.util.Locale
 
 private val BLUE = Color(0xFF2F6BFF)
@@ -302,8 +304,10 @@ fun MobileGlPluginApp() {
             config.turnipEnabled,
             config.turnipDriverPath,
             config.turnipDriverVersion,
+            config.activeRendererLibPath,
             turnipGpu,
             runtimeStatus.sharedWritten,
+            report,
         ) {
             DiagnosticsSnapshot(
                 diagnosticsEnabled = config.diagnosticsEnabled,
@@ -316,6 +320,8 @@ fun MobileGlPluginApp() {
                 autoVariantLabel = turnipGpu.autoVariant?.label,
                 runtimeConfigPath = runtimeStatus.sharedPath,
                 runtimeConfigSharedWritten = runtimeStatus.sharedWritten,
+                activeRendererLibPath = config.activeRendererLibPath,
+                selfTestLines = selfTestSummaryLines(report),
             )
         }
 
@@ -520,6 +526,21 @@ fun MobileGlPluginApp() {
                                     )
                                 )
                             },
+                            externalCoreActive = config.activeRendererLibPath != null,
+                            onUseBundledCore = {
+                                val updated = config.copy(
+                                    activeRendererLibPath = null,
+                                    selfTestLibraryPath = null,
+                                    activeRendererVersion = null,
+                                    activeRendererCommit = null,
+                                )
+                                persist(updated)
+                                scope.launch {
+                                    probing = true
+                                    report = selfTestRepository.run(updated, null)
+                                    probing = false
+                                }
+                            },
                         )
                         Dest.ConfigFile -> ConfigScreen(
                             writer = runtimeWriter,
@@ -579,6 +600,24 @@ private data class DeviceInfo(
     val coreVersion: String,
     val coreCommit: String?,
 )
+
+private fun selfTestSummaryLines(report: SelfTestResult?): String? {
+    report ?: return null
+    val time = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US).format(Date(report.finishedAt))
+    return buildString {
+        appendLine(
+            "时间: " + time + " · " + if (report.ok) "报告解析成功" else "报告解析失败: " + (report.error ?: "未知"),
+        )
+        report.backends.forEach { backend ->
+            val loader = backend.checks.firstOrNull { it.name == "Vulkan instance" }?.detail
+                ?.split(";")?.firstOrNull { it.contains("Vulkan loader", ignoreCase = true) }?.trim()
+            appendLine(
+                "• " + backend.backend + " · " + backend.renderer.ifBlank { "—" } + " · " + backend.verdict +
+                    (if (loader.isNullOrBlank()) "" else " · " + loader),
+            )
+        }
+    }.trimEnd()
+}
 
 private fun deviceInfo(context: Context, report: SelfTestResult?, glInfo: GlInfoProbe.Info?, config: PluginConfig): DeviceInfo {
     val glesReport = report?.backends?.firstOrNull { it.backend.contains("gles", true) }

@@ -28,10 +28,12 @@ UI 可手动切换内置变体；外部导入仍标实验。
 
 - MobileGL 不再链接系统 `libvulkan.so`：Android 构建使用 volk 运行时加载；
 - 启用 Turnip 时通过静态链接的 libadrenotools 打开选中变体，再 `volkInitializeCustom()`；
+- libadrenotools 的 4 个 hook 库（`libhook_impl` / `libmain_hook` / `libfile_redirect_hook` / `libgsl_alloc_hook`）随 APK 打包，且全部按 16KB page 对齐；
 - 未启用、非 Adreno、API < 28 或加载失败时回退系统 Vulkan，不崩溃；
 - 入口在 MobileGL UI：设置 → 驱动管理 → 骁龙 Turnip；不依赖 FCL/ZL2 的驱动下拉框。
 - runtime.conf：`MOBILEGL_TURNIP_ENABLED=0|1` 总是写；启用时写 `MOBILEGL_TURNIP_PATH=<绝对路径>`。
-- 外置 .so 导入到 `/sdcard/MobileGL/turnip/`，由游戏进程复制到自己的 cache 后加载；实验性，失败回退。
+- 外置 .so 或 Banners-Turnip 的 .zip 导入到 `/sdcard/MobileGL/turnip/`（zip 会自动取出其中的 `libvulkan_freedreno.so`），由游戏进程复制到自己的 cache 后加载；实验性，失败回退。
+- 内置 Turnip 加载器只存在于本项目的 `libMobileGL.so`。如果“外部 .so”里选择了官方核心，Turnip 开关不会生效；驱动管理页会显示警告并提供“切回内置核心”。
 
 ## 测试前提
 
@@ -73,7 +75,7 @@ UI 可手动切换内置变体；外部导入仍标实验。
 - 默认关闭；打开“记录诊断日志”后才写日志。
 - UI：`/sdcard/MobileGL/logs/ui.log`（无存储权限时回退 App 私有目录）。
 - 游戏进程：`/sdcard/MobileGL/logs/game.log`，记录选择变体、hook 目录、adrenotools 成功/失败和回退原因。
-- 分享日志通过 FileProvider 发送一个 `.txt` 文件，不受聊天软件文本长度限制，内容包含设备/GPU/变体配置与两份日志尾部。
+- 分享日志通过 FileProvider 发送一个 `.txt` 文件，不受聊天软件文本长度限制，内容包含设备/GPU/变体配置、当前渲染核心、上次驱动自检摘要（含实际使用的 Vulkan loader）与两份日志尾部。
 - 日志 512 KiB 轮转；runtime.conf 写入 `MOBILEGL_DIAG_LOG_ENABLED=0|1`。
 
 ## 当前限制
